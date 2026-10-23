@@ -1,4 +1,6 @@
 <!doctype html>
+</head>
+<body>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -56,6 +58,7 @@ button, select, input { font-weight: 500; }
   background: var(--panel-tint); border-radius: 18px; box-shadow: var(--shadow);
   display: flex; flex-direction: column; overflow: hidden;
 }
+[hidden] { display: none !important; }
 .panel[hidden] { display: none !important; }
 /* The header floats over the scrolling content; below it a progressive blur fades the
    content out as it scrolls under, instead of a hard edge. */
@@ -697,8 +700,6 @@ var RaycashEngines = (function () {
 })();
 </script>
 
-</head>
-<body>
 <canvas id="stage" aria-label="Animation preview"></canvas>
 
 <button class="show-panel" id="showPanel" type="button" hidden>
@@ -1255,10 +1256,10 @@ var RaycashEngines = (function () {
       note.textContent = 'Rendered ' + total + ' frames in ' + ((performance.now() - started) / 1000).toFixed(0) + ' s' + (choice.fmt === 'webm' ? '. This browser can’t make MP4 here, so it’s WebM.' : '.');
     } catch (err) {
       try { encoder.close(); } catch (e) {}
-      if (err && err.message === 'cancelled') note.textContent = 'Render cancelled.';
+      if (err && err.message === 'cancelled') { note.textContent = ''; discardRender(); }
       else { note.className = 'note error'; note.textContent = 'The render stopped: ' + (err && err.message ? err.message : err) + '. Try a lower resolution.'; }
     } finally {
-      busy = false; $('renderBtn').disabled = false; $('exportSelect').disabled = false; $('progress').hidden = true;
+      busy = false; $('renderBtn').disabled = false; $('exportSelect').disabled = false; $('progress').hidden = true; $('progressBar').style.width = '0%'; $('progressText').textContent = 'Preparing…';
       try { if (encoder.state !== 'closed') encoder.close(); } catch (e) {}
     }
   });
