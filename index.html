@@ -1,0 +1,1280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500&display=swap">
+<title>Raycash Panel Studio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: the animation fills the whole window; a white control panel floats over it on
+   the right (a bottom sheet on phones) and can be hidden. No outlines: fills and spacing only. */
+:root {
+  --page: #FAF8F1;
+  --panel: #FFFFFF;
+  --fill: #FFFFFF;
+  --fill-strong: #E7E9E1;
+  --slider: #1A1C16;
+  --slider-rest: #E2E4DC;
+  --lift: 0 0 0 0 transparent, 0 1px 2px rgb(20 24 10 / .07), 0 2px 8px rgb(20 24 10 / .06);
+  --panel-tint: #F5F6F2;
+  --fg: #1A1C16;
+  --muted: #6A6F62;
+  --accent: #46520F;
+  --accent-fg: #F4FBDC;
+  --danger: #A2321F;
+  --shadow: 0 1px 2px rgb(20 24 10 / .05), 0 6px 18px rgb(20 24 10 / .08);
+  --font-display: "Hanken Grotesk", "Helvetica Neue", system-ui, sans-serif;
+  --font-ui: "Hanken Grotesk", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: "Hanken Grotesk", "Helvetica Neue", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --panel: #0E0F0C; --fill: #1C1E19; --lift: none; --panel-tint: #0E0F0C; --slider: #FFFFFF; --slider-rest: rgb(255 255 255 / .16); --fill-strong: #2E3228; --fg: #ECEEE6; --muted: #9AA091;
+    --accent: #D3EE7C; --accent-fg: #1A1F08; --danger: #F08A72; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 6px 18px rgb(0 0 0 / .18); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --panel: #0E0F0C; --fill: #1C1E19; --lift: none; --panel-tint: #0E0F0C; --slider: #FFFFFF; --slider-rest: rgb(255 255 255 / .16); --fill-strong: #2E3228; --fg: #ECEEE6; --muted: #9AA091;
+  --accent: #D3EE7C; --accent-fg: #1A1F08; --danger: #F08A72; --shadow: 0 1px 2px rgb(0 0 0 / .18), 0 6px 18px rgb(0 0 0 / .18); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--page); color: var(--fg); font-family: var(--font-ui); font-weight: 500; font-size: 14px; line-height: 1.45; }
+button, select, input { font-weight: 500; }
+
+/* the animation: the whole window */
+#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+/* floating control panel */
+.panel {
+  transform-origin: top right;
+  position: fixed; z-index: 2;
+  top: calc(16px + env(safe-area-inset-top, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px)); width: var(--panel-w, 344px);
+  background: var(--panel-tint); border-radius: 18px; box-shadow: var(--shadow);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel[hidden] { display: none !important; }
+/* The header floats over the scrolling content; below it a progressive blur fades the
+   content out as it scrolls under, instead of a hard edge. */
+.panel-head { position: absolute; top: 0; left: 0; right: 0; z-index: 1; padding: 16px 16px 12px; display: grid; gap: 12px; }
+.panel-head::before {
+  content: ""; position: absolute; inset: 0 0 -36px 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(to bottom, var(--panel) 0%, var(--panel) 50%, rgb(14 15 12 / .55) 78%, rgb(14 15 12 / 0) 100%);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, rgb(0 0 0 / .6) 78%, transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0%, #000 55%, rgb(0 0 0 / .6) 78%, transparent 100%);
+}
+.player {
+  position: fixed; z-index: 2; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  width: var(--panel-w, 344px); background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); padding: 10px 14px 8px;
+}
+body.panel-open .panel { bottom: calc(16px + env(safe-area-inset-bottom, 0px) + var(--player-h, 76px) + 10px); }
+.dd-btn { width: 100%; justify-content: space-between; padding-inline: 14px; }
+.dd-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.dd-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.menu button[aria-checked="true"] { background: var(--fill-strong); }
+.lockup { display: flex; align-items: center; gap: 10px; margin: 0; }
+.lockup .logo { height: 20px; width: auto; color: var(--fg); flex: none; }
+.brand .lockup span { font-family: var(--font-display); font-weight: 500; font-size: 15px; color: var(--muted); letter-spacing: -0.01em; text-transform: none; margin-left: 0; white-space: nowrap; position: relative; top: 2.3px; /* sits on the wordmark's baseline */ }
+.colors-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.link-btn { font: inherit; font-weight: 500; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.link-btn:hover { color: var(--fg); }
+.brand { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.brand h1 { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: -0.01em; margin: 0; }
+.brand h1 span { font-family: var(--font-ui); font-weight: 400; font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-left: 6px; }
+.icon-btn { width: 30px; height: 30px; border-radius: 50%; border: 0; background: #000; box-shadow: inset 0 1px 0 rgb(255 255 255 / .10), 0 1px 4px rgb(0 0 0 / .4); color: var(--fg); cursor: pointer; display: grid; place-items: center; }
+.head-actions { display: flex; gap: 8px; flex: none; }
+/* Retracted: just the header row */
+.panel.retracted { bottom: auto !important; height: var(--head-h, 62px); }
+.panel.retracted .scroll { visibility: hidden; }
+.panel.retracted .panel-head::before { display: none; }
+#retractBtn svg { transition: transform .3s cubic-bezier(0.22, 1, 0.36, 1); }
+.panel.retracted #retractBtn svg { transform: rotate(180deg); }
+/* Drag the left edge to resize */
+.panel-resize { position: absolute; left: 0; top: 0; bottom: 0; width: 12px; z-index: 3; cursor: ew-resize; touch-action: none; }
+.panel-resize::after { content: ""; position: absolute; left: 4px; top: 50%; width: 4px; height: 40px; margin-top: -20px; border-radius: 2px; background: rgb(255 255 255 / .28); opacity: 0; transition: opacity .15s ease; }
+.panel-resize:hover::after, .panel-resize.dragging::after { opacity: 1; }
+body.resizing, body.resizing * { cursor: ew-resize !important; user-select: none; }
+@media (max-width: 720px) { .panel-resize, #retractBtn { display: none; } }
+.icon-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: calc(var(--head-h, 58px) + 4px) 16px 16px; display: flex; flex-direction: column; }
+/* scrolling stays, scrollbars go */
+.panel .scroll, .panel .swatches { scrollbar-width: none; -ms-overflow-style: none; }
+.panel .scroll::-webkit-scrollbar, .panel .swatches::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+.show-panel {
+  position: fixed; z-index: 2; top: calc(16px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  border: 0; border-radius: 999px; color: var(--fg); background: var(--panel); box-shadow: var(--shadow);
+  font: inherit; font-weight: 500; font-size: 13px; padding: 9px 14px; cursor: pointer; display: flex; gap: 8px; align-items: center;
+}
+.show-panel svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+/* segmented choices */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--fill); box-shadow: var(--lift); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg button { font: inherit; font-size: 13px; color: var(--muted); background: transparent; border: 0; border-radius: 8px; padding: 7px 10px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--fill); }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--slider); outline-offset: 2px; }
+
+/* transport */
+.transport { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; }
+.play { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--fg); color: var(--panel); cursor: pointer; display: grid; place-items: center; }
+.play svg { width: 12px; height: 12px; fill: currentColor; }
+.timeline { position: relative; height: 34px; min-width: 0; }
+.timeline .track { position: absolute; left: 0; right: 0; top: 20px; height: 4px; border-radius: 2px; background: var(--fill-strong); }
+.timeline .phase { position: absolute; top: 0; height: 15px; padding-left: 5px; border-left: 2px solid var(--slider); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.timeline .phase-bar { position: absolute; top: 20px; height: 4px; border-radius: 2px; background: var(--slider); opacity: .55; }
+.timeline .head { position: absolute; top: 15px; width: 3px; height: 14px; background: var(--fg); border-radius: 2px; transform: translateX(-1px); pointer-events: none; }
+.timeline input[type=range] { position: absolute; inset: 12px 0 0 0; width: 100%; height: 22px; opacity: 0; cursor: pointer; margin: 0; }
+.clock { grid-column: 2; margin-top: -6px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--muted); }
+.clock b { color: var(--fg); font-weight: 500; }
+
+/* sections */
+.section { padding-block: 14px; display: flex; flex-direction: column; gap: 12px; }
+.panel button, .panel label, .player { -webkit-user-select: none; user-select: none; }
+.sec-toggle { all: unset; box-sizing: border-box; display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; cursor: pointer; border-radius: 6px; }
+.sec-toggle:focus-visible { outline: 2px solid var(--slider); outline-offset: 3px; }
+.sec-toggle svg { width: 12px; height: 12px; flex: none; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .25s cubic-bezier(0.22, 1, 0.36, 1); }
+.section.collapsed .sec-toggle svg { transform: rotate(-90deg); }
+.colors-head .sec-toggle { width: auto; flex: 1; }
+.section-body { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr; min-width: 0; transition: grid-template-rows .3s cubic-bezier(0.22, 1, 0.36, 1), opacity .2s ease; }
+.section-inner { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.section.collapsed { gap: 0; }
+.section.collapsed .section-body { grid-template-rows: 0fr; opacity: 0; }
+.section.collapsed .section-inner, .section.moving .section-inner { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .section-body, .sec-toggle svg { transition: none; } }
+.section + .section { padding-top: 22px; }
+.section h2 { font-family: var(--font-display); font-weight: 600; font-size: 13px; letter-spacing: 0.02em; margin: 0; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.section h2 small { font-family: var(--font-ui); font-weight: 400; color: var(--muted); font-size: 11.5px; letter-spacing: 0; }
+.meta { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 12.5px; margin: 0; }
+.meta dt { color: var(--muted); }
+.meta dd { margin: 0; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.ctrl { display: grid; gap: 3px; }
+.ctrl .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ctrl label { font-size: 13px; }
+.ctrl output { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.ctrl .hint { font-size: 11.5px; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+input.slider { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; margin: 0; cursor: pointer; --p: 50%; }
+input.slider::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--slider) var(--p), var(--slider-rest) var(--p)); }
+input.slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--slider); border: 0; box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+input.slider::-moz-range-track { height: 4px; border-radius: 2px; background: var(--slider-rest); border: 0; }
+input.slider::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--slider); }
+input.slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--slider); border: 0; box-shadow: 0 1px 3px rgb(0 0 0 / .25); }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; font: inherit; font-weight: 500; font-size: 13px; color: var(--fg); background: none; border: 0; padding: 4px 0; cursor: pointer; text-align: left; }
+.toggle svg { width: 20px; height: 20px; flex: none; color: var(--muted); }
+.toggle[aria-checked="true"] svg { color: var(--slider); }
+
+.swatches { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; scroll-padding-inline: 16px; padding: 2px 16px 8px; margin: -2px -16px 0; }
+.swatches .swatch { flex: 0 0 132px; scroll-snap-align: start; }
+.swatch { display: grid; grid-template-columns: 40px 1fr; gap: 2px 10px; align-items: center; background: var(--fill); box-shadow: var(--lift); border-radius: 10px; padding: 6px; min-width: 0; cursor: pointer; }
+.swatch input[type=color] { grid-row: span 2; width: 40px; height: 40px; border: 0; border-radius: 9px; padding: 0; background: none; cursor: pointer; }
+.swatch input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+.swatch input[type=color]::-webkit-color-swatch { border: 0; border-radius: 9px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); }
+.swatch input[type=color]::-moz-color-swatch { border: 0; border-radius: 9px; }
+.swatch span { font-size: 12px; }
+.swatch code { font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); text-transform: uppercase; overflow: hidden; text-overflow: ellipsis; }
+
+/* download size chooser */
+.sizes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.size { border: 0; background: var(--fill); box-shadow: var(--lift); color: var(--muted); border-radius: 10px; padding: 12px 4px 10px; cursor: pointer; font: inherit; font-size: 11px; display: grid; justify-items: center; gap: 6px; }
+.size i { display: block; background: currentColor; opacity: .55; border-radius: 2px; }
+.size[aria-pressed="true"] { background: var(--fg); color: var(--fill); }
+.size[aria-pressed="true"] i { opacity: 1; }
+.mini { display: grid; place-items: center; background: var(--fill); box-shadow: var(--lift); border-radius: 12px; padding: 10px; height: 150px; }
+.mini canvas { display: block; max-width: 100%; max-height: 100%; border-radius: 4px; box-shadow: 0 1px 3px rgb(0 0 0 / .12); }
+
+.fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.field { display: grid; gap: 3px; min-width: 0; }
+.field label { font-size: 11.5px; color: var(--muted); }
+/* System dropdowns with our own chevron, so it sits a comfortable distance from the edge */
+select {
+  -webkit-appearance: none; appearance: none; font: inherit; font-size: 13px; color: var(--fg);
+  background-color: var(--fill); box-shadow: var(--lift); border: 0; border-radius: 8px; width: 100%; cursor: pointer;
+  padding: 8px 32px 8px 12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23ECEEE6' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-size: 12px 12px; background-position: right 12px center;
+}
+#kindSelect, #exportSelect { padding: 11px 44px 11px 16px; font-size: 14px; background-position: right 18px center; border-radius: 10px; }
+
+.btn { font: inherit; font-weight: 500; font-size: 13px; border-radius: 10px; border: 0; background: var(--fill); box-shadow: var(--lift); color: var(--fg); padding: 10px 12px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.btn.primary { background: var(--fg); color: var(--fill); box-shadow: none; }
+.btn.ghost { background: transparent; box-shadow: none; color: var(--muted); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.menu-wrap { display: grid; gap: 6px; }
+.export-btn { width: 100%; justify-content: space-between; padding-inline: 14px; }
+.export-btn svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+.export-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.menu { display: grid; gap: 2px; background: var(--fill); box-shadow: var(--lift); border-radius: 12px; padding: 4px; }
+.menu[hidden] { display: none; }
+.menu button { display: grid; gap: 1px; text-align: left; background: transparent; border: 0; border-radius: 9px; padding: 9px 10px; color: var(--fg); font: inherit; font-weight: 500; cursor: pointer; }
+.menu button b { font-weight: 500; font-size: 13px; }
+.menu button span { font-size: 11.5px; color: var(--muted); }
+.menu button:hover, .menu button:focus-visible { background: var(--fill-strong); outline: none; }
+.menu button:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .export-btn svg { transition: none; } }
+.btn-row .btn { flex: 1 1 130px; }
+.size-note { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.progress { display: grid; gap: 6px; }
+.progress .bar { height: 6px; background: var(--fill-strong); border-radius: 3px; overflow: hidden; }
+.progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s linear; }
+.progress p, .note { margin: 0; font-size: 12px; color: var(--muted); }
+.note:empty { display: none; }
+.note.error { color: var(--danger); }
+
+.toast { position: fixed; z-index: 3; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--panel); padding: 9px 14px; border-radius: 10px; font-size: 13px; box-shadow: var(--shadow); max-width: calc(100% - 32px); }
+
+/* phones: the panel becomes a bottom sheet over the animation */
+@media (max-width: 720px) {
+  .player { top: calc(10px + env(safe-area-inset-top, 0px)); bottom: auto; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: auto; }
+  body.panel-open .panel { top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .panel { top: auto; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); max-height: 58vh; }
+  .fields { grid-template-columns: 1fr 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .progress .bar i { transition: none; } }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.1.3/build/mp4-muxer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/webm-muxer@5.0.3/build/webm-muxer.js"></script>
+
+<!-- The animation engines. This exact source is also what "Download code" ships. -->
+<!-- Panels from the Raycash design system (Figma "Design System - 10.26", node 104:9551), converted from its SVG exports. -->
+<script id="illustration-data">var RAYCASH_ILLUSTRATIONS = {"i02":{"items":[{"k":"p","pts":[[464.889,287.435],[464.889,246.435],[464.889,244.435],[464.889,203.435],[689.889,173.935],[689.889,244.435],[689.889,246.435],[689.889,316.935]],"fills":[{"x1":455.059,"y1":232.815,"x2":490.916,"y2":394.886,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FEF4C1",1.0],[0.707,"#FFE46C",1.0],[1.0,"#DBFF4D",1.0]]},{"x1":552.699,"y1":295.122,"x2":631.947,"y2":394.662,"stops":[[0.0,"#DBFF4D",0.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-1.0,0.0,-0.0,-1.0,1096.778,421.87],"cx":548.389,"cy":210.935,"rx":76.5,"ry":126.0,"color":"#FEFDF0","op":0.3,"blur":29.829},{"k":"p","pts":[[280.889,333.365],[280.889,243.624],[280.889,239.246],[280.889,149.505],[576.889,84.935],[576.889,239.246],[576.889,243.624],[576.889,397.935]],"fills":[{"x1":267.957,"y1":213.812,"x2":388.587,"y2":541.515,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FEF4C1",1.0],[0.707,"#FFE46C",1.0],[1.0,"#DBFF4D",1.0]]},{"x1":396.408,"y1":350.19,"x2":567.586,"y2":479.418,"stops":[[0.0,"#DBFF4D",0.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-1.0,0.0,-0.0,-1.0,788.778,445.87],"cx":394.389,"cy":222.935,"rx":89.5,"ry":158.0,"color":"#FEFDF0","op":0.3,"blur":29.829},{"k":"p","pts":[[221.889,325.498],[221.889,244.505],[221.889,238.365],[221.889,112.498],[435.889,21.935],[435.889,238.365],[435.889,244.505],[435.889,460.935]],"fills":[{"x1":212.539,"y1":202.692,"x2":459.367,"y2":548.33,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FEF4C1",1.0],[0.707,"#FFE46C",1.0],[1.0,"#DBFF4D",1.0]]},{"x1":305.406,"y1":393.97,"x2":474.143,"y2":459.633,"stops":[[0.0,"#DBFF4D",0.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-1.0,0.0,-0.0,-1.0,455.778,461.87],"cx":227.889,"cy":230.935,"rx":90.0,"ry":158.0,"color":"#FEFDF0","op":0.3,"blur":29.829},{"k":"p","pts":[[88.889,352.362],[88.889,244.389],[88.889,237.48],[88.889,95.844],[279.889,-6.065],[279.889,237.48],[279.889,244.389],[279.889,487.935]],"fills":[{"x1":80.544,"y1":197.338,"x2":372.578,"y2":521.692,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FEF4C1",1.0],[0.707,"#FFE46C",1.0],[1.0,"#DBFF4D",1.0]]},{"x1":163.43,"y1":412.58,"x2":321.755,"y2":461.447,"stops":[[0.0,"#DBFF4D",0.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-1.0,0.0,-0.0,-1.0,146.778,445.87],"cx":73.389,"cy":222.935,"rx":89.5,"ry":158.0,"color":"#FEFDF0","op":0.3,"blur":29.829},{"k":"p","pts":[[-16.111,374.29],[-16.111,245.554],[-16.111,237.316],[-16.111,68.442],[100.889,-53.065],[100.889,237.316],[100.889,245.554],[100.889,535.935]],"fills":[{"x1":-21.223,"y1":189.454,"x2":280.198,"y2":361.452,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FEF4C1",1.0],[0.707,"#FFE46C",1.0],[1.0,"#DBFF4D",1.0]]},{"x1":29.55,"y1":446.089,"x2":133.168,"y2":462.52,"stops":[[0.0,"#DBFF4D",0.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":481.0,"fill":{"x1":325.87,"y1":170.445,"x2":313.981,"y2":463.832,"stops":[[0.0,"#FFFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1.0,0.0,0.0,-1.0,0.0,170.0],"x":0.0,"y":0.0,"w":672.0,"h":214.0,"fill":{"x1":336.0,"y1":170.0,"x2":336.0,"y2":-8.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":481.0},"i04":{"items":[{"k":"p","pts":[[-260.68,135.855],[49.899,363.354],[-52.801,775.413],[-354.639,512.844]],"fills":[{"x1":-128.55,"y1":104.041,"x2":-298.83,"y2":678.166,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFCE2",1.0],[0.707,"#FFED91",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,0.552,-0.482,0.876,-121.802,214.198],"cx":212.525,"cy":96.441,"rx":212.525,"ry":96.441,"color":"#FDFBF1","op":0.4,"blur":30.449},{"k":"p","pts":[[-43.6,59.236],[219.964,250.542],[134.097,595.062],[-122.158,374.435]],"fills":[{"x1":99.805,"y1":73.897,"x2":-81.11,"y2":487.637,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,0.552,-0.482,0.876,94.411,152.024],"cx":134.173,"cy":88.751,"rx":134.173,"ry":88.751,"color":"#FDFBF1","op":0.4,"blur":30.449},{"k":"p","pts":[[180.299,0.971],[407.829,166.232],[333.621,463.974],[112.407,273.373]],"fills":[{"x1":304.115,"y1":13.608,"x2":147.72,"y2":371.143,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,0.552,-0.482,0.876,272.508,46.393],"cx":139.32,"cy":78.224,"rx":139.32,"ry":78.224,"color":"#FEFDF0","op":0.3,"blur":32.352},{"k":"p","pts":[[363.986,-87.608],[576.857,67.006],[507.43,345.564],[300.468,167.243]],"fills":[{"x1":479.825,"y1":-75.784,"x2":333.507,"y2":258.714,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,0.552,-0.482,0.876,440.873,-17.392],"cx":138.866,"cy":76.008,"rx":138.866,"ry":76.008,"color":"#FEFDF0","op":0.3,"blur":32.352},{"k":"p","pts":[[538.127,-114.0],[708.913,9.778],[653.41,232.473],[487.347,89.742]],"fills":[{"x1":631.021,"y1":-104.467,"x2":514.154,"y2":163.021,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":484.0,"fill":{"x1":329.144,"y1":90.163,"x2":444.135,"y2":395.507,"stops":[[0.0,"#FEFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":0.5,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":336.5,"y1":311.0,"x2":336.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":484.0},"i05":{"items":[{"k":"p","pts":[[138.344,112.603],[314.488,395.528],[92.725,663.104],[-64.545,357.407]],"fills":[{"x1":270.315,"y1":187.466,"x2":-51.101,"y2":495.772,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"p","pts":[[226.712,47.816],[486.811,282.359],[340.967,612.396],[93.28,349.765]],"fills":[{"x1":381.663,"y1":86.09,"x2":148.431,"y2":485.486,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,220.903,-118.559],"cx":323.514,"cy":337.705,"rx":136.314,"ry":59.664,"color":"#FFFBE9","op":0.6,"blur":44.792},{"k":"p","pts":[[349.532,-0.494],[640.642,192.261],[545.698,539.536],[262.669,317.226]],"fills":[{"x1":507.947,"y1":14.247,"x2":337.017,"y2":442.892,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,212.293,-210.333],"cx":484.136,"cy":276.345,"rx":136.314,"ry":59.664,"color":"#FFFBE9","op":0.6,"blur":44.792},{"k":"p","pts":[[453.818,-70.179],[773.784,69.538],[740.091,427.978],[422.993,257.754]],"fills":[{"x1":612.403,"y1":-82.953,"x2":517.88,"y2":368.732,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,179.663,-281.189],"cx":595.157,"cy":182.278,"rx":136.314,"ry":59.664,"color":"#FFFBE9","op":0.6,"blur":44.792},{"k":"p","pts":[[541.383,-168.852],[882.225,-88.648],[913.106,270.044],[569.636,159.314]],"fills":[{"x1":695.639,"y1":-209.8,"x2":683.512,"y2":251.531,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":671.0,"h":484.0,"fill":{"x1":279.319,"y1":126.943,"x2":455.288,"y2":478.706,"stops":[[0.0,"#FFFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":0.0,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":336.0,"y1":311.0,"x2":336.0,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":671.0,"h":484.0},"i06":{"items":[{"k":"p","pts":[[-36.685,160.331],[216.661,329.507],[132.887,635.928],[-113.33,440.673]],"fills":[{"x1":101.432,"y1":172.91,"x2":-49.966,"y2":550.82,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,224.009,-36.476],"cx":177.555,"cy":384.329,"rx":185.33,"ry":80.555,"color":"#FEFDF0","op":0.3,"blur":36.217},{"k":"p","pts":[[132.166,41.589],[399.147,218.25],[312.168,536.395],[52.589,332.658]],"fills":[{"x1":277.43,"y1":55.128,"x2":120.885,"y2":447.844,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,202.784,-126.485],"cx":328.699,"cy":301.18,"rx":185.33,"ry":74.132,"color":"#FEFDF0","op":0.3,"blur":36.217},{"k":"p","pts":[[308.276,-33.25],[574.371,142.942],[487.585,460.377],[228.876,257.169]],"fills":[{"x1":453.078,"y1":-19.776,"x2":296.835,"y2":372.038,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,181.598,-235.242],"cx":513.553,"cy":208.728,"rx":185.33,"ry":83.406,"color":"#FEFDF0","op":0.3,"blur":36.217},{"k":"p","pts":[[492.208,-129.269],[758.303,46.923],[671.518,364.358],[412.808,161.15]],"fills":[{"x1":637.011,"y1":-115.795,"x2":480.768,"y2":276.019,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.856,0.516,-0.516,0.856,167.289,-341.679],"cx":697.675,"cy":129.795,"rx":185.33,"ry":74.132,"color":"#FEFDF0","op":0.3,"blur":36.217},{"k":"p","pts":[[677.466,-198.229],[944.509,-21.794],[857.723,295.641],[598.066,92.19]],"fills":[{"x1":822.716,"y1":-184.641,"x2":666.626,"y2":207.255,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":480.0,"fill":{"x1":279.735,"y1":125.894,"x2":453.224,"y2":476.109,"stops":[[0.0,"#FEFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":0.0,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":336.0,"y1":311.0,"x2":336.0,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":480.0},"i07":{"items":[{"k":"p","pts":[[414.764,258.84],[142.64,87.166],[373.01,-146.971],[650.758,42.235]],"fills":[{"x1":174.511,"y1":187.41,"x2":577.195,"y2":-51.559,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.636,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.797,0.603,-0.58,0.815,323.56,-80.288],"cx":118.519,"cy":68.582,"rx":118.519,"ry":68.582,"color":"#FEFDF0","op":0.3,"blur":35.495},{"k":"p","pts":[[352.018,398.274],[128.847,205.828],[367.1,25.161],[592.966,234.173]],"fills":[{"x1":144.007,"y1":300.488,"x2":539.235,"y2":139.623,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.636,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.797,0.603,-0.58,0.815,323.56,107.645],"cx":118.519,"cy":68.582,"rx":118.519,"ry":68.582,"color":"#FEFDF0","op":0.3,"blur":35.495},{"k":"p","pts":[[286.066,520.296],[112.808,315.067],[350.843,186.766],[524.13,407.21]],"fills":[{"x1":112.808,"y1":401.913,"x2":489.278,"y2":314.694,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.636,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.766,0.643,-0.621,0.784,268.705,249.179],"cx":118.519,"cy":68.582,"rx":118.519,"ry":68.582,"color":"#FEFDF0","op":0.3,"blur":35.495},{"k":"p","pts":[[197.623,630.3],[60.0,443.6],[278.893,347.74],[415.378,556.199]],"fills":[{"x1":53.361,"y1":520.127,"x2":391.782,"y2":472.048,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.636,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":481.0,"fill":{"x1":496.553,"y1":209.502,"x2":796.059,"y2":-52.184,"stops":[[0.0,"#FEFDF0",1.0],[1.0,"#F3EEDB",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":-0.5,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":481.0},"i08":{"items":[{"k":"p","pts":[[782.395,258.729],[780.173,34.213],[1165.49,260.991],[1152.84,488.719]],"fills":[{"x1":949.619,"y1":458.027,"x2":969.123,"y2":34.213,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.665,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.57,0.822,-0.997,-0.083,885.201,156.229],"cx":160.928,"cy":98.099,"rx":160.928,"ry":98.099,"color":"#FDFBF1","op":0.4,"blur":31.184},{"k":"p","pts":[[568.154,258.729],[565.933,34.214],[951.246,260.991],[938.604,488.719]],"fills":[{"x1":735.379,"y1":458.027,"x2":754.882,"y2":34.214,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.665,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.804,0.594,-0.442,0.897,509.636,70.024],"cx":206.256,"cy":101.911,"rx":206.256,"ry":101.911,"color":"#FEFDF0","op":0.3,"blur":37.866},{"k":"g","m":[0.587,0.81,-0.997,-0.071,603.893,206.16],"cx":118.619,"cy":97.196,"rx":118.619,"ry":97.196,"color":"#F5EDD8","op":0.4,"blur":23.533},{"k":"p","pts":[[322.906,258.729],[320.685,34.214],[705.998,260.991],[693.356,488.719]],"fills":[{"x1":490.13,"y1":458.027,"x2":509.634,"y2":34.213,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.665,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.804,0.594,-0.442,0.897,305.203,79.571],"cx":186.249,"cy":101.911,"rx":186.249,"ry":101.911,"color":"#FEFDF0","op":0.3,"blur":37.866},{"k":"p","pts":[[90.237,258.729],[88.016,34.213],[473.329,260.991],[460.687,488.719]],"fills":[{"x1":257.461,"y1":458.027,"x2":276.965,"y2":34.213,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.665,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.57,0.822,-0.997,-0.083,192.918,133.804],"cx":160.928,"cy":98.099,"rx":160.928,"ry":98.099,"color":"#FEFDF0","op":0.3,"blur":37.866},{"k":"p","pts":[[-155.315,258.729],[-157.536,34.213],[227.777,260.991],[215.135,488.719]],"fills":[{"x1":11.909,"y1":458.027,"x2":31.413,"y2":34.213,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.665,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.587,0.81,-0.997,-0.071,21.875,179.999],"cx":118.619,"cy":97.196,"rx":118.619,"ry":97.196,"color":"#FEFDF0","op":0.3,"blur":37.866},{"k":"p","pts":[[-391.353,258.729],[-393.574,34.213],[-8.26,260.991],[-20.903,488.719]],"fills":[{"x1":-224.128,"y1":458.027,"x2":-173.4,"y2":90.249,"stops":[[0.0,"#FFFDF5",1.0],[0.399,"#FFFAD7",1.0],[0.701,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":481.0,"fill":{"x1":313.836,"y1":37.281,"x2":321.021,"y2":337.512,"stops":[[0.0,"#F9F6E8",1.0],[1.0,"#FFFDF0",1.0]]}},"fade":{"m":[-1.0,0.0,0.0,1.0,671.5,311.0],"x":0.0,"y":0.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":481.0},"i09":{"items":[{"k":"p","pts":[[491.452,54.632],[621.482,365.398],[806.182,191.897],[777.653,-212.0]],"fills":[{"x1":477.443,"y1":-117.186,"x2":915.391,"y2":211.173,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.667,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.276,-0.961,-0.97,0.242,668.353,322.355],"cx":133.983,"cy":63.905,"rx":133.983,"ry":63.905,"color":"#F5EDD8","op":0.4,"blur":23.527},{"k":"g","m":[-0.296,-0.955,-0.965,0.26,564.73,286.018],"cx":114.476,"cy":54.687,"rx":114.476,"ry":54.687,"color":"#F5EDD8","op":0.4,"blur":23.527},{"k":"p","pts":[[309.881,67.627],[469.086,380.858],[624.516,213.99],[487.622,-95.57]],"fills":[{"x1":302.976,"y1":-31.982,"x2":688.445,"y2":143.175,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.667,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.276,-0.961,-0.97,0.242,488.274,313.026],"cx":124.277,"cy":63.905,"rx":124.277,"ry":63.905,"color":"#F5EDD8","op":0.4,"blur":23.527},{"k":"p","pts":[[138.663,184.661],[320.368,409.731],[436.397,211.368],[275.459,8.282]],"fills":[{"x1":129.733,"y1":115.153,"x2":463.655,"y2":208.082,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.667,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.622,-0.783,-0.698,0.716,351.088,283.48],"cx":100.448,"cy":62.791,"rx":100.448,"ry":62.791,"color":"#F5EDD8","op":0.4,"blur":23.527},{"k":"p","pts":[[13.726,333.523],[203.051,476.137],[274.176,267.132],[78.819,109.242]],"fills":[{"x1":-36.924,"y1":248.575,"x2":293.032,"y2":263.225,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.667,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.276,-0.961,-0.97,0.242,209.712,428.614],"cx":81.321,"cy":73.092,"rx":81.321,"ry":73.092,"color":"#F5EDD8","op":0.4,"blur":23.527},{"k":"p","pts":[[-66.662,481.826],[111.14,576.411],[150.856,383.843],[-30.021,259.306]],"fills":[{"x1":-131.317,"y1":397.163,"x2":176.948,"y2":396.304,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.667,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":481.0,"fill":{"x1":393.629,"y1":429.416,"x2":167.03,"y2":185.953,"stops":[[0.0,"#F9F6E8",1.0],[1.0,"#FFFDF0",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":-0.5,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":481.0},"i10":{"items":[{"k":"p","pts":[[788.897,-14.825],[782.215,571.739],[351.075,606.956],[508.113,227.327],[563.509,96.536],[708.454,-245.683]],"fills":[{"x1":654.475,"y1":88.767,"x2":902.77,"y2":452.301,"stops":[[0.0,"#FBFAF6",1.0],[0.399,"#FFFAD7",1.0],[0.641,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"p","pts":[[740.929,-21.408],[240.624,888.743],[-233.276,554.804],[264.876,73.429],[364.128,-48.254],[623.826,-366.641]],"fills":[{"x1":364.844,"y1":12.522,"x2":500.18,"y2":617.198,"stops":[[0.0,"#FBFAF6",1.0],[0.399,"#FFFAD7",1.0],[0.641,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"p","pts":[[608.05,-53.521],[-145.286,650.713],[-162.933,214.948],[654.572,-259.444]],"fills":[{"x1":310.28,"y1":-58.487,"x2":388.777,"y2":469.471,"stops":[[0.0,"#FBFAF6",1.0],[0.399,"#FFFAD7",1.0],[0.641,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"p","pts":[[587.845,-111.025],[-313.577,247.99],[-127.283,-173.957],[692.578,-304.557]],"fills":[{"x1":327.197,"y1":-257.684,"x2":202.737,"y2":320.795,"stops":[[0.0,"#FBFAF6",1.0],[0.399,"#FFFAD7",1.0],[0.641,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":478.0,"fill":{"x1":336.0,"y1":0.0,"x2":336.0,"y2":478.0,"stops":[[0.0,"#FFFCF2",1.0],[1.0,"#F3EEDB",1.0]]}},"fade":{"m":[-1.0,0.0,0.0,1.0,671.5,311.0],"x":0.0,"y":0.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":478.0},"i11":{"items":[{"k":"p","pts":[[548.196,299.462],[833.851,-142.21],[1018.57,398.942],[710.421,843.239]],"fills":[{"x1":717.221,"y1":13.684,"x2":1155.55,"y2":312.412,"stops":[[0.0,"#FFFDF0",1.0],[0.221,"#FFFAD7",1.0],[0.571,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.286,-0.958,0.825,0.565,586.736,474.452],"cx":201.492,"cy":93.135,"rx":201.492,"ry":93.135,"color":"#FEFDF0","op":0.3,"blur":37.699},{"k":"p","pts":[[356.021,324.679],[589.601,-98.035],[775.35,349.255],[522.031,777.229]],"fills":[{"x1":493.207,"y1":53.255,"x2":879.619,"y2":278.081,"stops":[[0.0,"#FFFDF0",1.0],[0.221,"#FFFAD7",1.0],[0.571,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.286,-0.958,0.815,0.579,398.657,456.377],"cx":188.628,"cy":93.798,"rx":188.628,"ry":93.798,"color":"#FEFDF0","op":0.3,"blur":37.699},{"k":"p","pts":[[188.991,395.754],[363.445,-22.619],[569.292,343.385],[377.485,769.944]],"fills":[{"x1":289.468,"y1":129.384,"x2":646.06,"y2":286.761,"stops":[[0.0,"#FFFDF0",1.0],[0.221,"#FFFAD7",1.0],[0.571,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.286,-0.958,0.825,0.565,167.797,541.033],"cx":201.492,"cy":93.135,"rx":201.492,"ry":93.135,"color":"#FEFDF0","op":0.3,"blur":37.699},{"k":"p","pts":[[-5.087,481.223],[122.683,76.663],[338.082,381.841],[195.09,796.213]],"fills":[{"x1":66.591,"y1":225.088,"x2":398.096,"y2":337.022,"stops":[[0.0,"#FFFDF0",1.0],[0.221,"#FFFAD7",1.0],[0.571,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.286,-0.958,0.815,0.579,-16.446,500.466],"cx":145.845,"cy":93.798,"rx":145.845,"ry":93.798,"color":"#FEFDF0","op":0.3,"blur":37.699},{"k":"p","pts":[[-188.145,592.178],[-113.25,154.891],[135.774,385.07],[47.182,836.84]],"fills":[{"x1":-149.758,"y1":318.269,"x2":177.902,"y2":380.471,"stops":[[0.0,"#FFFDF0",1.0],[0.221,"#FFFAD7",1.0],[0.571,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":484.0,"fill":{"x1":293.632,"y1":197.401,"x2":398.019,"y2":385.536,"stops":[[0.0,"#FFFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1,0,0,1,0,0],"x":-0.5,"y":311.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":484.0},"i12":{"items":[{"k":"p","pts":[[533.617,349.752],[346.864,-18.855],[645.629,-284.599],[806.956,106.624]],"fills":[{"x1":391.617,"y1":295.235,"x2":738.827,"y2":12.452,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.442,0.897,-0.897,-0.442,820.195,-288.649],"cx":499.916,"cy":110.894,"rx":183.546,"ry":80.863,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[424.128,349.752],[155.264,82.732],[351.778,-358.322],[603.918,-53.766]],"fills":[{"x1":325.992,"y1":364.855,"x2":533.775,"y2":-66.371,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.359,0.933,-0.933,-0.359,505.488,-158.998],"cx":307.333,"cy":94.051,"rx":183.546,"ry":80.863,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[242.961,366.058],[-56.092,126.02],[88.926,-361.0],[375.636,-79.513]],"fills":[{"x1":146.822,"y1":395.653,"x2":309.864,"y2":-80.793,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.0,1.0,-1.0,0.0,178.9,8.9],"cx":85.0,"cy":93.9,"rx":183.5,"ry":81.0,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[82.942,382.4],[-249.129,196.755],[-178.441,-251.745],[147.615,-27.93]],"fills":[{"x1":-7.828,"y1":418.0,"x2":72.886,"y2":-65.151,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.0,1.0,-1.0,0.0,16.9,144.9],"cx":-64.0,"cy":80.9,"rx":183.5,"ry":81.0,"color":"#F5EDD8","op":0.4,"blur":24.5}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":484.0,"fill":{"x1":345.572,"y1":-116.972,"x2":204.914,"y2":229.586,"stops":[[0.0,"#F3EEDB",1.0],[1.0,"#FEFDF0",1.0]]}},"fade":{"m":[-1.0,0.0,0.0,1.0,671.5,311.0],"x":0.0,"y":0.0,"w":672.0,"h":214.0,"fill":{"x1":335.5,"y1":311.0,"x2":335.5,"y2":489.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":484.0},"i13":{"items":[{"k":"p","pts":[[469.195,424.019],[689.461,-0.374],[798.265,469.622],[561.964,898.481]],"fills":[{"x1":492.329,"y1":263.825,"x2":728.856,"y2":689.535,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.19,-0.982,0.96,0.281,513.922,474.792],"cx":200.341,"cy":81.53,"rx":200.341,"ry":81.53,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[277.314,449.055],[488.079,33.127],[612.946,492.064],[386.032,912.434]],"fills":[{"x1":295.92,"y1":292.343,"x2":504.836,"y2":605.391,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.307,-0.952,0.983,0.182,391.9,542.974],"cx":187.55,"cy":82.433,"rx":187.55,"ry":82.433,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[141.739,536.5],[282.136,114.174],[447.796,483.637],[293.434,914.228]],"fills":[{"x1":140.1,"y1":393.801,"x2":358.27,"y2":594.147,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[-0.428,-0.904,0.999,0.034,237.175,629.03],"cx":200.341,"cy":81.53,"rx":200.341,"ry":81.53,"color":"#FEFDF0","op":0.3,"blur":29.75},{"k":"p","pts":[[-65.231,588.711],[76.053,175.997],[260.131,477.77],[159.841,899.848]],"fills":[{"x1":-73.635,"y1":428.607,"x2":187.332,"y2":632.589,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0.0,"y":0.0,"w":672.0,"h":478.0,"fill":{"x1":444.138,"y1":123.106,"x2":708.035,"y2":730.2,"stops":[[0.0,"#FFFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":{"m":[1.0,0.0,0.0,-1.0,0.0,167.0],"x":0.0,"y":0.0,"w":672.0,"h":214.0,"fill":{"x1":336.0,"y1":167.0,"x2":336.0,"y2":-11.464,"stops":[[0.0,"#F8F8F8",0.0],[1.0,"#F8F8F8",1.0]]}},"w":672.0,"h":478.0},"i14":{"items":[{"k":"p","pts":[[325.837,-50.447],[431.782,75.019],[590.844,11.608],[471.362,-108.462]],"fills":[{"x1":319.686,"y1":8.716,"x2":544.457,"y2":-80.16,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFCE2",1.0],[0.707,"#FFED91",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.609,0.793,0.793,-0.609,360.617,1.863],"cx":99.901,"cy":43.422,"rx":99.901,"ry":43.422,"color":"#FDFBF1","op":0.4,"blur":20.659},{"k":"p","pts":[[272.446,47.176],[383.225,179.493],[548.373,113.656],[423.539,-13.058]],"fills":[{"x1":288.487,"y1":124.166,"x2":489.369,"y2":16.555,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.609,0.793,0.793,-0.609,330.831,81.878],"cx":99.901,"cy":39.96,"rx":99.901,"ry":39.96,"color":"#FDFBF1","op":0.4,"blur":20.659},{"k":"p","pts":[[243.018,146.035],[353.492,277.906],[518.271,212.216],[393.774,85.935]],"fills":[{"x1":258.995,"y1":222.782,"x2":459.413,"y2":115.387,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.609,0.793,0.793,-0.609,288.526,189.53],"cx":99.901,"cy":44.96,"rx":99.901,"ry":44.96,"color":"#FDFBF1","op":0.4,"blur":20.659},{"k":"p","pts":[[202.711,250.364],[313.185,382.235],[477.965,316.544],[353.467,190.264]],"fills":[{"x1":218.689,"y1":327.11,"x2":419.106,"y2":219.716,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.609,0.793,0.793,-0.609,261.349,289.887],"cx":99.901,"cy":39.96,"rx":99.901,"ry":39.96,"color":"#FDFBF1","op":0.4,"blur":20.659},{"k":"p","pts":[[176.98,353.771],[287.642,486.135],[452.421,420.444],[327.736,293.671]],"fills":[{"x1":193.046,"y1":430.75,"x2":393.517,"y2":323.433,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,1,0,0],"x":0,"y":0,"w":672,"h":478,"fill":{"x1":310.815,"y1":181.061,"x2":574.704,"y2":788.138,"stops":[[0.0,"#FFFDF0",1],[1.0,"#F9F6E8",1]]}},"fade":{"m":[1,0,0,1,0,0],"x":0,"y":-47,"w":672,"h":214,"fill":{"x1":336,"y1":167,"x2":336,"y2":-47,"stops":[[0,"#F8F8F8",0],[0.83394,"#F8F8F8",1],[1,"#F8F8F8",1]]}},"w":672,"h":478},"i15":{"items":[{"k":"p","pts":[[-36.061,380.792],[197.904,209.412],[120.539,-101.0],[-106.842,96.798]],"fills":[{"x1":63.475,"y1":404.759,"x2":-64.8,"y2":-27.742,"stops":[[0.0,"#FFFDF0",1.0],[0.399,"#FFFCE2",1.0],[0.707,"#FFED91",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,-0.552,-0.482,-0.876,68.56,321.774],"cx":160.1,"cy":72.651,"rx":160.1,"ry":72.651,"color":"#FDFBF1","op":0.4,"blur":22.938},{"k":"p","pts":[[127.471,438.51],[326.018,294.395],[261.333,34.862],[68.291,201.065]],"fills":[{"x1":235.5,"y1":427.466,"x2":99.213,"y2":115.787,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,-0.552,-0.482,-0.876,231.435,368.611],"cx":101.076,"cy":66.858,"rx":101.076,"ry":66.858,"color":"#FDFBF1","op":0.4,"blur":22.938},{"k":"p","pts":[[296.138,482.403],[467.542,357.908],[411.639,133.613],[244.994,277.197]],"fills":[{"x1":389.412,"y1":472.882,"x2":271.596,"y2":203.544,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,-0.552,-0.482,-0.876,365.599,448.185],"cx":104.953,"cy":58.928,"rx":104.953,"ry":58.928,"color":"#FEFDF0","op":0.3,"blur":24.372},{"k":"p","pts":[[434.513,549.131],[594.873,432.658],[542.573,222.814],[386.664,357.147]],"fills":[{"x1":521.777,"y1":540.224,"x2":411.553,"y2":288.24,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]},{"k":"g","m":[0.834,-0.552,-0.482,-0.876,492.431,496.236],"cx":104.611,"cy":57.259,"rx":104.611,"ry":57.259,"color":"#FEFDF0","op":0.3,"blur":24.372},{"k":"p","pts":[[565.697,569.013],[694.354,475.769],[652.542,308.008],[527.444,415.53]],"fills":[{"x1":635.676,"y1":561.832,"x2":547.638,"y2":360.328,"stops":[[0.0,"#FEFDF0",1.0],[0.399,"#FFFAD7",1.0],[0.707,"#FFEFA2",1.0],[1.0,"#DBFF4D",1.0]]}]}],"bg":{"m":[1,0,0,-1,0,505],"x":0.0,"y":0.0,"w":672.0,"h":505.0,"fill":{"x1":329.144,"y1":410.925,"x2":371.425,"y2":72.188,"stops":[[0.0,"#FEFDF0",1.0],[1.0,"#F9F6E8",1.0]]}},"fade":null,"w":672,"h":478}};</script>
+<script id="engine-src">
+var RaycashEngines = (function () {
+  // ---- shared helpers ------------------------------------------------------------
+  function cubicBezier(x1, y1, x2, y2) {
+    var bez = function (t, a, b) { return 3 * a * (1 - t) * (1 - t) * t + 3 * b * (1 - t) * t * t + t * t * t; };
+    var dBez = function (t, a, b) { return 3 * a * (1 - t) * (1 - t) + 6 * (b - a) * (1 - t) * t + 3 * (1 - b) * t * t; };
+    return function (x) {
+      var t = x;
+      for (var i = 0; i < 8; i++) { var d = dBez(t, x1, x2); if (Math.abs(d) < 1e-6) break; t -= (bez(t, x1, x2) - x) / d; }
+      return bez(Math.min(1, Math.max(0, t)), y1, y2);
+    };
+  }
+  var clamp01 = function (x) { return Math.min(1, Math.max(0, x)); };
+  function rgba(hex, a) {
+    var h = hex.replace('#', ''); if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+    return 'rgba(' + parseInt(h.slice(0, 2), 16) + ',' + parseInt(h.slice(2, 4), 16) + ',' + parseInt(h.slice(4, 6), 16) + ',' + a + ')';
+  }
+  var mul = function (p, q) { return [p[0]*q[0] + p[2]*q[1], p[1]*q[0] + p[3]*q[1], p[0]*q[2] + p[2]*q[3], p[1]*q[2] + p[3]*q[3], p[0]*q[4] + p[2]*q[5] + p[4], p[1]*q[4] + p[3]*q[5] + p[5]]; };
+  var apply = function (m, pt) { return [m[0]*pt[0] + m[2]*pt[1] + m[4], m[1]*pt[0] + m[3]*pt[1] + m[5]]; };
+  var inv2x3 = function (g) { var a = g[0][0], b = g[0][1], e = g[0][2], c = g[1][0], d = g[1][1], f = g[1][2];
+    var det = a*d - b*c, ia = d/det, ib = -b/det, ic = -c/det, id = a/det; return [ia, ic, ib, id, -(ia*e + ib*f), -(ic*e + id*f)]; };
+  var pathPoints = function (d) { var n = d.match(/-?[\d.]+/g).map(Number), pts = []; for (var i = 0; i < n.length; i += 2) pts.push([n[i], n[i+1]]); return pts; };
+  function gradient(ctx, stops) { var g = ctx.createLinearGradient(0, 0.5, 1, 0.5); stops.forEach(function (s) { g.addColorStop(s[0], s[1]); }); return g; }
+  // Figma's "layer blur" radius ≈ 2 × CSS blur. Where canvas filters are missing, a soft radial falloff stands in.
+  function canFilter(ctx) { try { var old = ctx.filter; ctx.filter = 'blur(2px)'; var ok = ctx.filter === 'blur(2px)'; ctx.filter = old || 'none'; return ok; } catch (e) { return false; } }
+
+  // ================================================================================
+  // FAN — Figma "MVP › Illustration container" (13419:138190), frame 507 × 495.
+  // A conveyor of panels round a pivot at the top-left: every `interval` the top panel
+  // leans back (resistance), lifts off the top, the stack moves up one slot and a panel
+  // comes in from the left. Ten panels (two copies of the five) so the frame never empties.
+  // ================================================================================
+  // ---- Moon: the night counterpart to the sun rays ----------------------------------
+  // Light becomes moonlight: a black night background, solid panels with silver-white tips
+  // instead of lime, and blue-white haze for the glows.
+  // Built to the same rule as the sun versions: each panel's base and the glows are the
+  // background colour, so panels dissolve into the night exactly where the sun ones dissolve
+  // into the cream. Pale sits just above black, then moon blue, then silver at the tips.
+  var MOON = { base: '#030304', pale: '#0A0F1B', pale2: '#0A0F1B', gold: '#2B3D66', lime: '#BFCDEB',
+               bg: '#030304', bgTop: '#030304', bgBottom: '#030304', bgA: '#030304', bgB: '#030304', fade: '#030304', glow: '#030304' };
+  var MOON_GLOW = 1;   // glows are black haze at full strength, the moon's version of the cream mist
+  // A fine, quiet grain over the moon version (a fixed pattern, so it never flickers).
+  function grain(ctx, W0, H0) {
+    if (!grain.tile) {
+      var c = document.createElement('canvas'); c.width = c.height = 128; var g = c.getContext('2d'), im = g.createImageData(128, 128), n = 42;
+      var rnd = function () { n = (n * 1664525 + 1013904223) >>> 0; return n / 4294967296; };
+      for (var i = 0; i < im.data.length; i += 4) { var v = rnd() < 0.5 ? 0 : 255; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = Math.round(rnd() * 4); }
+      g.putImageData(im, 0, 0); grain.tile = c;
+    }
+    ctx.save(); ctx.fillStyle = ctx.createPattern(grain.tile, 'repeat'); ctx.fillRect(-W0, -H0, W0 * 3, H0 * 3); ctx.restore();
+  }
+  // A black fade over the lower part of the frame, so the panels sink into the night.
+  function moonFade(ctx, W0, H0) {
+    var g = ctx.createLinearGradient(0, H0 * 0.55, 0, H0 * 0.98);
+    g.addColorStop(0, 'rgba(3,3,4,0)'); g.addColorStop(0.6, 'rgba(3,3,4,0.7)'); g.addColorStop(1, 'rgba(3,3,4,1)');
+    ctx.save(); ctx.fillStyle = g; ctx.fillRect(-W0, H0 * 0.55, W0 * 3, H0 * 2); ctx.restore();
+  }
+
+  var fan = {
+    id: 'fan', name: 'Fan', node: '13419:138190', frame: { w: 507, h: 495 }, panels: 5,
+    defaults: { wipes: 2, interval: 0.2, step: 2.2, pause: 1, rest: 7, resistance: 0.14, softness: 0.675, sway: 2.5, stagger: 0.05,
+      colors: { base: '#FBFAF6', pale: '#FFFAD7', pale2: '#FEF7C1', gold: '#FFED9B', lime: '#DBFF4D', bg: '#FAF8F1' } },
+    create: function (S, ctx) {
+      var C = S.colors;
+      // Figma layers, bottom → top. m: layer → frame transform; d: outline; gt: gradientTransform.
+      var CARDS = [
+        { w: 717.8574, h: 334.2282, m: [0.519, 0.8548, 0.9613, -0.2757, -300.2231, 78.8445], pale: 'pale',
+          d: 'M 135.1896 176.5953 L 671.4194 0 L 717.8574 330.9088 L 398.9337 334.2282 L 288.6256 334.2282 L 0 334.2282 Z',
+          gt: [[1.0543864, -1.2545092, 0.6927208], [0.7338176, 0.4686031, -0.1803635]] },
+        { w: 868.3209, h: 267.2083, m: [0.6161, 0.7877, 0.9064, -0.4224, -130.5034, 29.2153], pale: 'pale2',
+          d: 'M 133.7961 77.8899 L 868.3209 0 L 776.2296 264.4676 L 394.8215 267.2083 L 285.6505 267.2083 L 0 267.2083 Z',
+          gt: [[1.5962570, -0.4549912, -0.1789012], [0.6011211, 0.3595240, 0.0503462]] },
+        { w: 910.1228, h: 194.1088, m: [0.7456, 0.6664, 0.7565, -0.654, -67.606, 2.321], pale: 'pale',
+          d: 'M 141.4553 42.4290 L 910.1228 0 L 908.9296 193.6980 L 407.9643 194.1088 L 295.1592 194.1088 L 0 194.1088 Z',
+          gt: [[1.3246742, -0.6630133, -0.0192645], [0.7639003, 0.2404655, 0.0631658]] },
+        { w: 909.925, h: 161.2845, m: [0.8694, 0.4942, 0.4661, -0.8847, 26.644, 19.314], pale: 'pale',
+          d: 'M 120.6800 9.2367 L 909.9250 0 L 752.0358 161.2845 L 0 92.5250 Z',
+          gt: [[1.4544257, -0.8258585, 0.1048991], [1.1642939, 0.2974880, -0.1045348]] },
+        { w: 876.7866, h: 183.4949, m: [0.9583, 0.2857, 0.1025, -0.9947, 14.8081, -12.5115], pale: 'pale2',
+          d: 'M 115.6206 11.7365 L 876.7866 0 L 703.2131 183.4949 L 0 85.1823 Z',
+          gt: [[1.7143651, -0.7112785, -0.3120812], [0.7673513, 0.2469854, 0.1154944]] },
+      ];
+      var PIVOT = { x: -20, y: -20 };
+      var STEPS_PER_WIPE = 5, WIPES = Math.max(1, Math.round(S.wipes));
+      var WIPE_TIME = (STEPS_PER_WIPE - 1) * S.interval + S.step;
+      var WIPE_STARTS = []; for (var w = 0; w < WIPES; w++) WIPE_STARTS.push(w * (WIPE_TIME + S.pause));
+      var LOOP = WIPE_STARTS[WIPES - 1] + WIPE_TIME + S.rest;
+      var SLOT_DIR = [66.0, 42.8, 30.6, 23.4, 7.5];
+      var RING_DESIGNS = [4, 3, 2, 1, 0], RING = 10;
+      // slot p → direction from the pivot. 0…4 the fan (top → bottom), < 0 off the top, > 4 the queue on the left.
+      var KP = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], KD = [-34, 7.5, 23.4, 30.6, 42.8, 66, 108, 160, 200, 240, 280];
+      var KT = (function () { var n = KP.length, d = [], m = [], i;
+        for (i = 0; i < n - 1; i++) d.push((KD[i + 1] - KD[i]) / (KP[i + 1] - KP[i]));
+        m[0] = d[0]; m[n - 1] = d[n - 2];
+        for (i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : 2 / (1 / d[i - 1] + 1 / d[i]);
+        return m; })();
+      function dirAt(p) {
+        var n = KP.length, i = Math.min(n - 2, Math.max(0, Math.floor(p - KP[0]))), h = KP[i + 1] - KP[i], u = (p - KP[i]) / h;
+        return (2*u*u*u - 3*u*u + 1) * KD[i] + (u*u*u - 2*u*u + u) * h * KT[i] + (-2*u*u*u + 3*u*u) * KD[i + 1] + (u*u*u - u*u) * h * KT[i + 1];
+      }
+      var ease = cubicBezier(0.6, -S.resistance, 0.45 - 0.4 * S.softness, 1);
+      // Panels set off one after another: the top panel first, each one below it STAGGER later
+      // (its place is read at the start of each wipe, so it stays fixed through the wipe).
+      function shift(t, j) { var s = 0; WIPE_STARTS.forEach(function (st, w) {
+        var p0 = ((j - w * STEPS_PER_WIPE + 1) % RING + RING) % RING - 1, d = (S.stagger || 0) * Math.min(5, Math.max(0, p0));
+        for (var k = 0; k < STEPS_PER_WIPE; k++) s += ease(clamp01((t - st - k * S.interval - d) / S.step)); }); return s; }
+      function drift(t) { var p = t / LOOP * Math.PI * 2; return (Math.sin(p) + 0.35 * Math.sin(2 * p + 1.1) - 0.35 * Math.sin(1.1)) * S.sway; }
+      function gradientSpace(c) { var g = c.gt, a = g[0][0], b = g[0][1], e = g[0][2], cc = g[1][0], d = g[1][1], f = g[1][2];
+        var det = a * d - b * cc, ia = d / det, ib = -b / det, ic = -cc / det, id = a / det;
+        return [ia * c.w, ic * c.h, ib * c.w, id * c.h, -(ia * e + ib * f) * c.w, -(ic * e + id * f) * c.h]; }
+      // Each panel continues past its far end, so a tilted panel never ends inside the frame.
+      function extendedPath(c, slotDir) {
+        var m = c.m, a = m[0], b = m[1], cc = m[2], d = m[3], e = m[4], f = m[5], det = a * d - b * cc;
+        var toFrame = function (p) { return [a * p[0] + cc * p[1] + e, b * p[0] + d * p[1] + f]; };
+        var toLocal = function (P) { var x = P[0] - e, y = P[1] - f; return [(d * x - cc * y) / det, (-b * x + a * y) / det]; };
+        var pts = pathPoints(c.d).map(toFrame), n = pts.length;
+        var ux = Math.cos(slotDir * Math.PI / 180), uy = Math.sin(slotDir * Math.PI / 180);
+        var proj = function (P) { return (P[0] - PIVOT.x) * ux + (P[1] - PIVOT.y) * uy; };
+        var far = 0, best = -Infinity;
+        for (var i = 0; i < n; i++) { var mm = (proj(pts[i]) + proj(pts[(i + 1) % n])) / 2; if (mm > best) { best = mm; far = i; } }
+        var A = pts[far], B = pts[(far + 1) % n], Ap = pts[(far - 1 + n) % n], Bn = pts[(far + 2) % n];
+        var carry = function (to, from) { var dx = to[0] - from[0], dy = to[1] - from[1], len = Math.hypot(dx, dy); dx /= len; dy /= len;
+          var along = dx * ux + dy * uy; if (along < 0.3) { dx = ux; dy = uy; along = 1; } return [to[0] + dx * 600 / along, to[1] + dy * 600 / along]; };
+        var ext = [A, B, carry(B, Bn), carry(A, Ap)].map(toLocal).map(function (p) { return p[0] + ' ' + p[1]; });
+        var path = new Path2D(c.d); path.addPath(new Path2D('M ' + ext[0] + ' L ' + ext[1] + ' L ' + ext[2] + ' L ' + ext[3] + ' Z'));
+        return path;
+      }
+      var PREP = CARDS.map(function (c, i) {
+        return { m: c.m, path: extendedPath(c, SLOT_DIR[i]), gm: gradientSpace(c),
+          grad: gradient(ctx, [[0, C.base], [0.399, C[c.pale]], [0.7067, C.gold], [1, C.lime]]) };
+      });
+      function render(time, w, h) {
+        var t = ((time % LOOP) + LOOP) % LOOP;
+        var k = Math.max(w / 507, h / 495), ox = (w - 507 * k) / 2, oy = (h - 495 * k) / 2;
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = C.bg; ctx.fillRect(0, 0, w, h);
+        var sway = drift(t), list = [];
+        for (var j = 0; j < RING; j++) { var design = RING_DESIGNS[j % 5], p = ((j - shift(t, j) + 1) % RING + RING) % RING - 1;
+          list.push({ design: design, p: p, deg: dirAt(p) - SLOT_DIR[design] }); }
+        list.sort(function (a, b) { return b.p - a.p; });
+        list.forEach(function (it) {
+          var c = PREP[it.design];
+          ctx.setTransform(k, 0, 0, k, ox, oy);
+          ctx.translate(PIVOT.x, PIVOT.y); ctx.rotate((it.deg + sway) * Math.PI / 180); ctx.translate(-PIVOT.x, -PIVOT.y);
+          ctx.transform(c.m[0], c.m[1], c.m[2], c.m[3], c.m[4], c.m[5]);
+          ctx.save(); ctx.clip(c.path); ctx.transform(c.gm[0], c.gm[1], c.gm[2], c.gm[3], c.gm[4], c.gm[5]);
+          ctx.fillStyle = c.grad; ctx.fillRect(-20, -20, 41, 41); ctx.restore();
+        });
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        if (S.moon) { ctx.setTransform(k, 0, 0, k, ox, oy); moonFade(ctx, 507, 495); grain(ctx, 507, 495); }
+
+      }
+      return { loop: LOOP, render: render, background: C.bg,
+        phases: WIPE_STARTS.map(function (st, i) { return { start: st, end: st + WIPE_TIME, label: 'Wipe ' + (i + 1) }; }) };
+    }
+  };
+
+  // ================================================================================
+  // PEAKS — Figma "MVP › Component" (13906:105341), frame 635.31 × 452.
+  // A mirrored conveyor that never stops: panels grow out of the centre seam and spread
+  // outward, reshaping slot to slot. Each wipe surges almost a full round; a slow spread
+  // finishes it, so new panels only appear while it moves fast.
+  // ================================================================================
+  var peaks = {
+    id: 'peaks', name: 'Peaks', node: '13906:105341', frame: { w: 635.3111, h: 452 }, panels: 6,
+    defaults: { wipes: 2, wipeDur: 3.2, pause: 1, rest: 7, creep: 0.04, build: 0.45, softness: 0.825, stagger: 0.05, glows: true, glowStrength: 1, fade: true,
+      colors: { base: '#FFFDF0', pale: '#FEF4C1', gold: '#FFE46C', lime: '#DBFF4D', bgTop: '#F9F6E8', bgBottom: '#FFFDF0', fade: '#F8F8F8' } },
+    create: function (S, ctx) {
+      var C = S.colors, FW = 635.3111, FH = 452;
+      var FILLS = [
+        { gt: [[-0.8412, 0.2928, 0.5076], [-0.3365, -0.1883, 0.6897]], stops: [[0, C.base], [0.399, C.pale], [0.7067, C.gold], [1, C.lime]] },
+        { gt: [[-0.8793, 1.1014, -0.2957], [-8.0559, -0.8793, 2.072]], stops: [[0, rgba(C.lime, 0)], [1, rgba(C.lime, 1)]] },
+      ];
+      var Q8 = function (w, h) { return 'M ' + (w === 213.975 ? '44.1417 0 L 105.4911 0 L 108.4838 0 L 169.8333 0' : w === 334.6304 ? '103.2376 0 L 164.9751 0 L 169.6553 0 L 265.5983 0' : '103.477 0 L 185.8875 0 L 191.1609 0 L 299.2657 0') +
+        ' L ' + w + ' ' + h + ' L ' + (w === 213.975 ? '108.4838' : w === 334.6304 ? '169.6553' : '191.1609') + ' ' + h + ' L ' + (w === 213.975 ? '105.4911' : w === 334.6304 ? '164.9751' : '185.8875') + ' ' + h + ' L 0 ' + h + ' Z'; };
+      var P = {
+        outerR: { w: 213.975, h: 217.7454, m: [0, 1, 1, 0, 477.9531, 120.4543] },
+        midR:   { w: 334.6304, h: 157.4176, m: [0, 1, 1, 0, 434.5918, 60.1267] },
+        innerR: { w: 377.0484, h: 142.3357, m: [0, 1, 1, 0, 335.6172, 39.3892] },
+        outerL: { w: 213.975, h: 217.7454, m: [0, 1, -1, 0, 155.5762, 120.4543] },
+        midL:   { w: 334.6304, h: 157.4176, m: [0, 1, -1, 0, 198.9355, 60.1267] },
+        innerL: { w: 377.0484, h: 141.3931, m: [0, 1, -1, 0, 297.9121, 39.3892] },
+      };
+      Object.keys(P).forEach(function (k) { P[k].d = Q8(P[k].w, P[k].h); });
+      var GL = {
+        e92: { x: 491.1484, y: 120.4543, w: 131.9669, h: 240.3683, color: '#FEFDF0', opacity: 0.3, blur: 58.6611 },
+        e91: { x: 396.8867, y: 120.4543, w: 131.9669, h: 240.3683, color: '#FEFDF0', opacity: 0.3, blur: 58.6611 },
+        e90: { x: 17.9531, y: 120.4543, w: 131.9669, h: 240.3683, color: '#FEFDF0', opacity: 0.3, blur: 58.6611 },
+        e89: { x: 101.8457, y: 120.4543, w: 131.9669, h: 240.3683, color: '#FEFDF0', opacity: 0.3, blur: 58.6611 },
+        e88: { x: 257.3789, y: 34.676, w: 111.2293, h: 311.0649, color: '#FCF8EE', opacity: 0.6, blur: 36.4561 },
+        e93: { x: 247.9531, y: 49.7578, w: 130.0817, h: 311.0649, color: '#FEFDF0', opacity: 0.3, blur: 58.6611 },
+      };
+      if (S.moon) Object.keys(GL).forEach(function (k) { GL[k].color = MOON.glow; });
+      var BG = { w: FW, h: FH, m: [1, 0, 0, 1, 0, 0], gt: [[0.0535, 1.6012, -0.1491], [-114.0791, 1.2069, 53.6834]], stops: [[0, C.bgTop], [1, C.bgBottom]] };
+      var FADE = { w: 633.4412, h: 201.7209, m: [1, 0, 0, 1, -0.4707, 293.155], gt: [[0, 1.1991, 0], [-1.1991, 0, 1.0996]], stops: [[0, rgba(C.fade, 0)], [1, rgba(C.fade, 1)]] };
+      var SEAM_X = 316.76, GROW_FROM = 0.2, RING = 4, STEPS = 3, WIPES = Math.max(1, Math.round(S.wipes));
+      var WIPE_STARTS = []; for (var w = 0; w < WIPES; w++) WIPE_STARTS.push(w * (S.wipeDur + S.pause));
+      var LOOP = WIPE_STARTS[WIPES - 1] + S.wipeDur + S.rest;
+      var ROUND_ENDS = WIPE_STARTS.map(function (_, i) { return i + 1 < WIPES ? WIPE_STARTS[i + 1] : LOOP; });
+      // Keep the slow spread below a full round, so new panels still only appear during wipes.
+      var longest = Math.max.apply(null, ROUND_ENDS.map(function (e, i) { return e - WIPE_STARTS[i]; }));
+      var CREEP = Math.min(S.creep, 0.9 * STEPS / longest);
+      var SURGE = WIPE_STARTS.map(function (st, i) { return STEPS - CREEP * (ROUND_ENDS[i] - st); });
+      var gradToFrame = function (layer, gt) { return mul(layer.m, mul([layer.w, 0, 0, layer.h, 0, 0], inv2x3(gt))); };
+      function slotFrom(layer) { return { pts: pathPoints(layer.d).map(function (p) { return apply(layer.m, p); }), grads: FILLS.map(function (f) { return gradToFrame(layer, f.gt); }) }; }
+      var squeezeX = function (s, x0, k) { return { pts: s.pts.map(function (p) { return [x0 + (p[0] - x0) * k, p[1]]; }),
+        grads: s.grads.map(function (g) { return [g[0] * k, g[1], g[2] * k, g[3], x0 + (g[4] - x0) * k, g[5]]; }) }; };
+      var shiftX = function (s, dx) { return { pts: s.pts.map(function (p) { return [p[0] + dx, p[1]]; }), grads: s.grads.map(function (g) { return [g[0], g[1], g[2], g[3], g[4] + dx, g[5]]; }) }; };
+      function sideSlots(inner, mid, outer, dir) {
+        var S1 = slotFrom(inner), S2 = slotFrom(mid), S3 = slotFrom(outer);
+        var S0 = squeezeX(S1, SEAM_X, 0); S0.grads = squeezeX(S1, SEAM_X, GROW_FROM).grads;
+        var xs = S3.pts.map(function (p) { return p[0]; });
+        var S4 = shiftX(S3, dir > 0 ? (FW + 12) - Math.min.apply(null, xs) : -12 - Math.max.apply(null, xs));
+        return [S0, S1, S2, S3, S4];
+      }
+      var SIDES = { R: sideSlots(P.innerR, P.midR, P.outerR, 1), L: sideSlots(P.innerL, P.midL, P.outerL, -1) };
+      function lerpSlot(slots, p) {
+        var i = Math.min(3, Math.max(0, Math.floor(p))), u = p - i;
+        var k = function (j) { return slots[Math.min(4, Math.max(0, j))]; };
+        var P0 = k(i - 1), P1 = k(i), P2 = k(i + 1), P3 = k(i + 2);
+        var cr = function (a, b, c, d) { return 0.5 * ((2*b) + (-a + c)*u + (2*a - 5*b + 4*c - d)*u*u + (-a + 3*b - 3*c + d)*u*u*u); };
+        return { pts: P1.pts.map(function (_, n) { return [0, 1].map(function (ax) { return cr(P0.pts[n][ax], P1.pts[n][ax], P2.pts[n][ax], P3.pts[n][ax]); }); }),
+          grads: P1.grads.map(function (_, g) { return P1.grads[g].map(function (_, e) { return cr(P0.grads[g][e], P1.grads[g][e], P2.grads[g][e], P3.grads[g][e]); }); }) };
+      }
+      var ease = cubicBezier(S.build, 0, 0.45 - 0.4 * S.softness, 1);
+      // Even pace: distance along the route (panel centre, right side); the hop from off-edge to seam is free.
+      var ROUTE = (function () {
+        var centre = function (p) { var xs = lerpSlot(SIDES.R, p).pts.map(function (q) { return q[0]; }); return (Math.min.apply(null, xs) + Math.max.apply(null, xs)) / 2; };
+        var N = 400, LAPS = Math.ceil((STEPS * WIPES + RING) / RING) + 1, lap = [], d = [], ps = [];
+        for (var i = 0; i <= N; i++) lap.push(centre(4 * i / N));
+        var perLap = lap[N] - lap[0];
+        for (i = 0; i <= LAPS * N; i++) { var L = Math.min(LAPS - 1, Math.floor(i / N)), kk = i - L * N; ps.push(4 * i / N); d.push(L * perLap + (lap[kk] - lap[0])); }
+        return { d: d, ps: ps, at: function (p) { var i = Math.round(p / 4 * N); return d[Math.min(LAPS * N, Math.max(0, i))]; } };
+      })();
+      function slotAtDistance(dist) { var d = ROUTE.d, ps = ROUTE.ps, lo = 0, hi = d.length - 1;
+        while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (d[mid] <= dist) lo = mid; else hi = mid; }
+        var u = (dist - d[lo]) / ((d[hi] - d[lo]) || 1); return ps[lo] + (ps[hi] - ps[lo]) * u; }
+      function progress(t, j) { var s = CREEP * t; WIPE_STARTS.forEach(function (st, i) {
+        var p0 = ((j + i * STEPS) % RING + RING) % RING, d = (S.stagger || 0) * Math.max(0, 3 - p0);
+        s += SURGE[i] * ease(clamp01((t - st - d) / S.wipeDur)); }); return s; }
+      function slotOf(t, j) {
+        var moved = progress(t, j), round = Math.min(WIPES - 1, Math.floor(moved / STEPS + 1e-9));
+        var a = j + round * STEPS, f = (moved - round * STEPS) / STEPS, d0 = ROUTE.at(a), d1 = ROUTE.at(a + STEPS);
+        var p = slotAtDistance(d0 + (d1 - d0) * f); return ((p % RING) + RING) % RING;
+      }
+      var GRADS = { fills: FILLS.map(function (f) { return gradient(ctx, f.stops); }), bg: gradient(ctx, BG.stops), fade: gradient(ctx, FADE.stops) };
+      var FILTER = canFilter(ctx);
+      function fillBox(layer, g) { ctx.save(); ctx.transform.apply(ctx, layer.m); ctx.beginPath(); ctx.rect(0, 0, layer.w, layer.h); ctx.clip();
+        ctx.transform.apply(ctx, mul([layer.w, 0, 0, layer.h, 0, 0], inv2x3(layer.gt))); ctx.fillStyle = g; ctx.fillRect(-1e4, -1e4, 2e4, 2e4); ctx.restore(); }
+      function drawPanel(shape) {
+        ctx.save(); ctx.beginPath(); shape.pts.forEach(function (p, n) { if (n) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath(); ctx.clip();
+        GRADS.fills.forEach(function (g, i) { ctx.save(); ctx.transform.apply(ctx, shape.grads[i]); ctx.fillStyle = g; ctx.fillRect(-50, -50, 101, 101); ctx.restore(); });
+        ctx.restore();
+      }
+      function drawGlow(g, scale) {
+        if (!S.glows) return;
+        ctx.save(); ctx.globalAlpha = Math.min(1, g.opacity * S.glowStrength * (S.moon ? MOON_GLOW : 1));
+        var cx = g.x + g.w / 2, cy = g.y + g.h / 2;
+        if (FILTER) { ctx.filter = 'blur(' + (g.blur / 2) * scale + 'px)'; ctx.fillStyle = g.color; ctx.beginPath(); ctx.ellipse(cx, cy, g.w / 2, g.h / 2, 0, 0, Math.PI * 2); ctx.fill(); }
+        else { ctx.translate(cx, cy); ctx.scale(g.w / 2 + g.blur, g.h / 2 + g.blur); var rg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+          rg.addColorStop(0, g.color); rg.addColorStop(0.55, rgba(g.color, 0.6)); rg.addColorStop(1, rgba(g.color, 0)); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); }
+        ctx.restore();
+      }
+      function drawSide(t, side, glowOuter, glowMid, scale) {
+        var ps = []; for (var j = 0; j < RING; j++) ps.push(slotOf(t, j)); ps.sort(function (a, b) { return b - a; });
+        var o = false, m = false;
+        ps.forEach(function (p) { if (!o && p <= 2.5) { drawGlow(glowOuter, scale); o = true; } if (!m && p <= 1.5) { drawGlow(glowMid, scale); m = true; } drawPanel(lerpSlot(SIDES[side], p)); });
+        if (!o) drawGlow(glowOuter, scale); if (!m) drawGlow(glowMid, scale);
+      }
+      function render(time, w, h) {
+        var t = ((time % LOOP) + LOOP) % LOOP;
+        var k = Math.max(w / FW, h / FH), ox = (w - FW * k) / 2, oy = (h - FH * k) / 2;
+        ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = C.bgBottom; ctx.fillRect(0, 0, w, h);
+        ctx.setTransform(k, 0, 0, k, ox, oy); fillBox(BG, GRADS.bg);
+        drawSide(t, 'R', GL.e92, GL.e91, k); drawSide(t, 'L', GL.e90, GL.e89, k); drawGlow(GL.e88, k); drawGlow(GL.e93, k);
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        ctx.setTransform(k, 0, 0, k, ox, oy); if (S.fade) fillBox(FADE, GRADS.fade);
+        if (S.moon) { moonFade(ctx, FW, FH); grain(ctx, FW, FH); }
+      }
+      return { loop: LOOP, render: render, background: C.bgBottom, creepLimited: CREEP < S.creep,
+        phases: WIPE_STARTS.map(function (st, i) { return { start: st, end: st + S.wipeDur, label: 'Wipe ' + (i + 1) }; }) };
+    }
+  };
+
+  fan.number = 1; peaks.number = 3;
+  // ================================================================================
+  // CONVEYOR — the general engine for the design-system illustrations (#2, #4–#15).
+  // Built straight from each illustration's Figma panels: every panel slides into the
+  // place, shape and colours of the panel in front of it; the front panel leaves the
+  // frame and a new one comes in at the back, from off the frame. Same timing as Peaks:
+  // it never stops, wipes surge it a full round, and new panels only arrive mid-wipe.
+  // ================================================================================
+  var NAMES = {
+    i02: 'Rising steps', i04: 'Tilted cards', i05: 'Chevrons', i06: 'Chevron stack', i07: 'Arrows',
+    i08: 'Sawtooth', i09: 'Diamonds', i10: 'Wide rays', i11: 'Chevron row', i12: 'Curtain',
+    i13: 'Slants', i14: 'Small chevrons', i15: 'Stair cards', i02f: 'Rising steps, flipped',
+  };
+  function conveyor(id, D) {
+    var panels = D.items.filter(function (it) { return it.k === 'p'; });
+    var main0 = panels[0].fills[0].stops, pick = function (i) { return main0[Math.min(main0.length - 1, i)][1]; };
+    var bgStops = D.bg && D.bg.fill ? D.bg.fill.stops : [[0, '#FEFDF0', 1], [1, '#F9F6E8', 1]];
+    var defaults = { wipes: 2, wipeDur: 3.2, pause: 1, rest: 7, creep: 0.04, build: 0.45, softness: 0.825, stagger: 0.05,
+      glows: true, glowStrength: 1, fade: true,
+      colors: { base: pick(0), pale: pick(1), gold: pick(2), lime: pick(main0.length - 1),
+                bgA: bgStops[0][1], bgB: bgStops[bgStops.length - 1][1], fade: D.fade && D.fade.fill ? D.fade.fill.stops[D.fade.fill.stops.length - 1][1] : '#F8F8F8' } };
+    return {
+      id: id, name: NAMES[id] || id, number: parseInt(id.slice(1), 10) + (/f$/.test(id) ? 0.5 : 0), frame: { w: D.w, h: D.h }, panels: panels.length, defaults: defaults,
+      create: function (S, ctx) {
+        var C = S.colors, DC = defaults.colors, W0 = D.w, H0 = D.h;
+        // colours: a palette colour the viewer changed replaces that stop on every panel
+        var roleOf = function (i, n) { return i === 0 ? 'base' : i === n - 1 ? 'lime' : i === 1 ? 'pale' : 'gold'; };
+        var recolor = function (stops, overlay) {
+          return stops.map(function (s, i) {
+            var role = overlay ? 'lime' : roleOf(i, stops.length), col = C[role] !== DC[role] ? C[role] : s[1];
+            if (overlay && C.lime === DC.lime) col = s[1];
+            return [s[0], col, s[2]];
+          });
+        };
+        // every panel outline gets the same number of points (extra points split the longest edges)
+        var N = Math.max.apply(null, panels.map(function (p) { return p.pts.length; }));
+        var norm = function (pts) {
+          pts = pts.map(function (p) { return p.slice(); });
+          while (pts.length < N) {
+            var best = 0, bl = -1;
+            for (var i = 0; i < pts.length; i++) { var a = pts[i], b = pts[(i + 1) % pts.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); if (l > bl) { bl = l; best = i; } }
+            var a2 = pts[best], b2 = pts[(best + 1) % pts.length]; pts.splice(best + 1, 0, [(a2[0] + b2[0]) / 2, (a2[1] + b2[1]) / 2]);
+          }
+          return pts;
+        };
+        var slotOfPanel = function (p) {
+          return { pts: norm(p.pts), fills: p.fills.map(function (f, fi) { return { x1: f.x1, y1: f.y1, x2: f.x2, y2: f.y2, stops: recolor(f.stops, fi > 0) }; }) };
+        };
+        var centroid = function (s) { var x = 0, y = 0; s.pts.forEach(function (p) { x += p[0]; y += p[1]; }); return [x / s.pts.length, y / s.pts.length]; };
+        var shift = function (s, dx, dy) { return { pts: s.pts.map(function (p) { return [p[0] + dx, p[1] + dy]; }),
+          fills: s.fills.map(function (f) { return { x1: f.x1 + dx, y1: f.y1 + dy, x2: f.x2 + dx, y2: f.y2 + dy, stops: f.stops }; }) }; };
+        var offFrame = function (s) { var xs = s.pts.map(function (p) { return p[0]; }), ys = s.pts.map(function (p) { return p[1]; });
+          return Math.max.apply(null, xs) < -4 || Math.min.apply(null, xs) > W0 + 4 || Math.max.apply(null, ys) < -4 || Math.min.apply(null, ys) > H0 + 4; };
+        var visible = panels.map(slotOfPanel), n = visible.length;
+        var step = function (a, b) { var ca = centroid(a), cb = centroid(b); return [cb[0] - ca[0], cb[1] - ca[1]]; };
+        var dOut = step(visible[n - 2], visible[n - 1]), dIn = step(visible[1], visible[0]);
+        var exits = [], s = visible[n - 1]; do { s = shift(s, dOut[0], dOut[1]); exits.push(s); } while (!offFrame(s) && exits.length < 10);
+        var entries = []; s = visible[0]; do { s = shift(s, dIn[0], dIn[1]); entries.unshift(s); } while (!offFrame(s) && entries.length < 10);
+        var SLOTS = entries.concat(visible, exits), K = SLOTS.length, RING = K - 1, FIRST = entries.length;
+        // glows stay put, tucked between the same slots as in Figma
+        var glows = [], seen = 0;
+        D.items.forEach(function (it) { if (it.k === 'p') seen++; else glows.push({ g: it, after: FIRST + seen - 0.5 }); });
+        // smooth (Catmull-Rom) blend through the slots
+        function lerp(p) {
+          var i = Math.min(K - 2, Math.max(0, Math.floor(p))), u = p - i;
+          var at = function (j) { return SLOTS[Math.min(K - 1, Math.max(0, j))]; };
+          var P0 = at(i - 1), P1 = at(i), P2 = at(i + 1), P3 = at(i + 2);
+          var cr = function (a, b, c, d) { return 0.5 * ((2*b) + (-a + c)*u + (2*a - 5*b + 4*c - d)*u*u + (-a + 3*b - 3*c + d)*u*u*u); };
+          var mix = function (a, b) { return a + (b - a) * u; };
+          return { pts: P1.pts.map(function (_, q) { return [cr(P0.pts[q][0], P1.pts[q][0], P2.pts[q][0], P3.pts[q][0]), cr(P0.pts[q][1], P1.pts[q][1], P2.pts[q][1], P3.pts[q][1])]; }),
+            fills: P1.fills.map(function (f, fi) { var g = P2.fills[fi];
+              return { x1: cr(P0.fills[fi].x1, f.x1, g.x1, P3.fills[fi].x1), y1: cr(P0.fills[fi].y1, f.y1, g.y1, P3.fills[fi].y1),
+                       x2: cr(P0.fills[fi].x2, f.x2, g.x2, P3.fills[fi].x2), y2: cr(P0.fills[fi].y2, f.y2, g.y2, P3.fills[fi].y2),
+                       stops: f.stops.map(function (st, k) { var o = g.stops[k] || st; return [mix(st[0], o[0]), mixHex(st[1], o[1], u), mix(st[2], o[2])]; }) }; }) };
+        }
+        // timing: Peaks' never-stop model, one full round of n slots per wipe
+        var WIPES = Math.max(1, Math.round(S.wipes)), STEPS = n;
+        var STARTS = []; for (var w = 0; w < WIPES; w++) STARTS.push(w * (S.wipeDur + S.pause));
+        var LOOP = STARTS[WIPES - 1] + S.wipeDur + S.rest;
+        var ENDS = STARTS.map(function (_, i) { return i + 1 < WIPES ? STARTS[i + 1] : LOOP; });
+        var longest = Math.max.apply(null, ENDS.map(function (e, i) { return e - STARTS[i]; }));
+        var CREEP = Math.min(S.creep, 0.9 * STEPS / longest);
+        var SURGE = STARTS.map(function (st, i) { return STEPS - CREEP * (ENDS[i] - st); });
+        var ease = cubicBezier(S.build, 0, 0.45 - 0.4 * S.softness, 1);
+        var FRONT = FIRST + n - 1;
+        function progress(t, j) { var v = CREEP * t; STARTS.forEach(function (st, i) {
+          var p0 = ((j + i * STEPS) % RING + RING) % RING, d = (S.stagger || 0) * Math.max(0, FRONT - p0);
+          v += SURGE[i] * ease(clamp01((t - st - d) / S.wipeDur)); }); return v; }
+        // even pace along the route (distance travelled by the panel's centre; the hop from exit back to entry is free)
+        var seg = []; for (var q = 0; q < K - 1; q++) { var a = centroid(SLOTS[q]), b = centroid(SLOTS[q + 1]); seg.push(Math.hypot(b[0] - a[0], b[1] - a[1])); }
+        var cum = [0]; for (q = 0; q < (K - 1) * (WIPES + 3); q++) cum.push(cum[q] + seg[q % (K - 1)]);
+        var dist = function (p) { var i = Math.floor(p), f = p - i; return cum[i] + (cum[i + 1] - cum[i]) * f; };
+        var slotAt = function (d) { var lo = 0, hi = cum.length - 1; while (hi - lo > 1) { var m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; } return lo + (d - cum[lo]) / ((cum[hi] - cum[lo]) || 1); };
+        function slotOf(t, j) {
+          var moved = progress(t, j), round = Math.min(WIPES - 1, Math.floor(moved / STEPS + 1e-9));
+          var a0 = j + round * STEPS, f = (moved - round * STEPS) / STEPS;
+          var p = slotAt(dist(a0) + (dist(a0 + STEPS) - dist(a0)) * f);
+          return ((p % RING) + RING) % RING;
+        }
+        var FILTER = canFilter(ctx);
+        function grad(f) { var g = ctx.createLinearGradient(f.x1, f.y1, f.x2, f.y2); f.stops.forEach(function (st) { g.addColorStop(Math.min(1, Math.max(0, st[0])), rgba(st[1], st[2])); }); return g; }
+        function box(b, stops) {
+          if (!b || !b.fill) return;
+          var m = b.m, c = [[b.x, b.y], [b.x + b.w, b.y], [b.x + b.w, b.y + b.h], [b.x, b.y + b.h]].map(function (p) { return apply(m, p); });
+          ctx.beginPath(); c.forEach(function (p, i) { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath();
+          ctx.fillStyle = grad({ x1: b.fill.x1, y1: b.fill.y1, x2: b.fill.x2, y2: b.fill.y2, stops: stops }); ctx.fill();
+        }
+        var bgStopsNow = D.bg && D.bg.fill ? D.bg.fill.stops.map(function (st, i, arr) { return [st[0], i === 0 ? C.bgA : i === arr.length - 1 ? C.bgB : st[1], st[2]]; }) : null;
+        var fadeStopsNow = D.fade && D.fade.fill ? D.fade.fill.stops.map(function (st) { return [st[0], C.fade, st[2]]; }) : null;
+        function drawGlow(g, scale) {
+          if (!S.glows) return;
+          ctx.save(); ctx.globalAlpha = Math.min(1, g.op * S.glowStrength * (S.moon ? MOON_GLOW : 1));
+          if (FILTER) ctx.filter = 'blur(' + g.blur * scale + 'px)';
+          ctx.transform(g.m[0], g.m[1], g.m[2], g.m[3], g.m[4], g.m[5]);
+          if (FILTER) { ctx.fillStyle = S.moon ? MOON.glow : g.color; ctx.beginPath(); ctx.ellipse(g.cx, g.cy, g.rx, g.ry, 0, 0, Math.PI * 2); ctx.fill(); }
+          else { ctx.translate(g.cx, g.cy); ctx.scale(g.rx + g.blur * 1.5, g.ry + g.blur * 1.5); var rg = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+            rg.addColorStop(0, g.color); rg.addColorStop(0.55, rgba(g.color, 0.6)); rg.addColorStop(1, rgba(g.color, 0)); ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill(); }
+          ctx.restore();
+        }
+        function drawPanel(sh) {
+          ctx.beginPath(); sh.pts.forEach(function (p, i) { if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }); ctx.closePath();
+          sh.fills.forEach(function (f) { ctx.fillStyle = grad(f); ctx.fill(); });
+        }
+        function render(time, w, h) {
+          var t = ((time % LOOP) + LOOP) % LOOP, k = Math.max(w / W0, h / H0), ox = (w - W0 * k) / 2, oy = (h - H0 * k) / 2;
+          ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = C.bgB; ctx.fillRect(0, 0, w, h);
+          ctx.setTransform(k, 0, 0, k, ox, oy);
+          if (bgStopsNow) { var bb = D.bg; box({ m: [1, 0, 0, 1, 0, 0], x: -W0, y: -H0, w: W0 * 3, h: H0 * 3, fill: bb.fill }, bgStopsNow); }
+          var ps = []; for (var j = 0; j < RING; j++) ps.push(slotOf(t, j)); ps.sort(function (a, b) { return a - b; });
+          var gi = 0;
+          ps.forEach(function (p) {
+            while (gi < glows.length && glows[gi].after < p) { drawGlow(glows[gi].g, k); gi++; }
+            drawPanel(lerp(p));
+          });
+          while (gi < glows.length) { drawGlow(glows[gi].g, k); gi++; }
+          ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+          if (S.fade && fadeStopsNow) box(D.fade, fadeStopsNow);
+          if (S.moon) { moonFade(ctx, W0, H0); grain(ctx, W0, H0); }
+        }
+        return { loop: LOOP, render: render, background: C.bgB, creepLimited: CREEP < S.creep,
+          phases: STARTS.map(function (st, i) { return { start: st, end: st + S.wipeDur, label: 'Wipe ' + (i + 1) }; }) };
+      }
+    };
+  }
+  function mixHex(a, b, u) {
+    if (a === b || u <= 0) return a; if (u >= 1) return b;
+    var pa = [1, 3, 5].map(function (i) { return parseInt(a.slice(i, i + 2), 16); }), pb = [1, 3, 5].map(function (i) { return parseInt(b.slice(i, i + 2), 16); });
+    return '#' + pa.map(function (v, i) { return ('0' + Math.round(v + (pb[i] - v) * u).toString(16)).slice(-2); }).join('');
+  }
+
+  var registry = { fan: fan, peaks: peaks };
+  Object.defineProperty(registry, 'MOON', { value: MOON, enumerable: false });
+  var DATA = (typeof RAYCASH_ILLUSTRATIONS !== 'undefined') ? RAYCASH_ILLUSTRATIONS : {};
+  // Flip an illustration upside down: outlines, gradients, glows, background and fade.
+  function mirrored(D) {
+    var H = D.h, fy = function (y) { return H - y; }, M = function (m) { return [m[0], -m[1], m[2], -m[3], m[4], H - m[5]]; };
+    var fill = function (f) { return { x1: f.x1, y1: fy(f.y1), x2: f.x2, y2: fy(f.y2), stops: f.stops }; };
+    var boxM = function (b) { return b && { m: M(b.m), x: b.x, y: b.y, w: b.w, h: b.h, fill: b.fill && fill(b.fill) }; };
+    return { w: D.w, h: D.h, bg: boxM(D.bg), fade: boxM(D.fade), items: D.items.map(function (it) {
+      return it.k === 'p' ? { k: 'p', pts: it.pts.map(function (q) { return [q[0], fy(q[1])]; }).reverse(), fills: it.fills.map(fill) }
+                          : { k: 'g', m: M(it.m), cx: it.cx, cy: it.cy, rx: it.rx, ry: it.ry, color: it.color, op: it.op, blur: it.blur };
+    }) };
+  }
+  if (DATA.i02 && !DATA.i02f) DATA.i02f = mirrored(DATA.i02);
+  Object.keys(DATA).forEach(function (id) { registry[id] = conveyor(id, DATA[id]); });
+  return registry;
+})();
+</script>
+
+</head>
+<body>
+<canvas id="stage" aria-label="Animation preview"></canvas>
+
+<button class="show-panel" id="showPanel" type="button" hidden>
+  <svg viewBox="0 0 14 14"><path d="M2 4h10M2 10h10M5 2v4M9 8v4"/></svg>Controls
+</button>
+
+<div class="player transport" id="player">
+      <button class="play" id="playBtn" type="button" aria-label="Pause">
+        <svg viewBox="0 0 14 14" id="playIcon"><rect x="2" y="1" width="3.5" height="12" rx="1"/><rect x="8.5" y="1" width="3.5" height="12" rx="1"/></svg>
+      </button>
+      <div class="timeline" id="timeline">
+        <div class="track"></div>
+        <div id="phases"></div>
+        <div class="head" id="playhead"></div>
+        <input type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Scrub through the loop">
+      </div>
+      <div class="clock" id="clock"><b>0.00</b> / 0.00 s</div>
+    </div>
+
+<aside class="panel" id="panel" aria-label="Controls">
+  <div class="panel-resize" id="panelResize" role="separator" aria-orientation="vertical" aria-label="Resize panel" title="Drag to resize · double-click to reset" tabindex="0"></div>
+  <div class="panel-head">
+    <div class="brand">
+      <h1 class="lockup"><svg class="logo" viewBox="0 0 228 46.76" role="img" aria-label="Raycash"><path id="Vector" d="M10.195 15.9092L0 14.966V31.0314L10.195 30.0872V15.9092Z" fill="currentColor"/><path id="Vector_2" d="M25.5054 0V10.3513L10.1939 7.1902V15.9106L15.3073 16.3843V29.6149L10.1939 30.0886V38.8091L25.5054 35.6479V45.9993L45.9982 38.3046V7.69463L25.5054 0ZM35.728 33.5327L25.5298 35.6384V10.3619L35.728 12.4676V33.5338V33.5327Z" fill="currentColor"/><g transform="translate(61.33 6.72)"><path id="Vector" d="M157.3 9.23155C163.145 9.23155 166.671 13.1283 166.671 19.5765V32.4728H160.13V20.4115C160.13 17.4425 158.321 15.4942 155.63 15.4942C152.893 15.4942 151.13 17.4425 151.13 20.4115V32.4728H144.589V0H151.13V12.6644C152.568 10.4841 154.702 9.23155 157.3 9.23155Z" fill="currentColor"/><path id="Vector_2" d="M133.466 32.9351C127.528 32.9351 123.399 29.9198 122.935 24.7705H129.198C129.337 26.3014 130.961 27.3219 133.141 27.3219C135.089 27.3219 136.203 26.6725 136.203 25.6055C136.203 21.8479 123.399 25.188 123.399 16.6987C123.399 12.4772 126.832 9.22994 132.445 9.22994C137.362 9.22994 141.769 11.7814 142.326 16.8379H135.739C135.646 15.6781 134.393 14.6575 132.306 14.6575C130.821 14.6575 129.708 15.1678 129.708 16.2348C129.708 19.7604 142.558 16.0492 142.558 25.5591C142.558 29.7342 138.615 32.9351 133.466 32.9351Z" fill="currentColor"/><path id="Vector_3" d="M114.514 9.69383H121.054V32.4712H114.514V29.2239C112.936 31.5898 110.478 32.9351 107.277 32.9351C101.385 32.9351 96.6999 27.6003 96.6999 21.0593C96.6999 14.5184 101.385 9.22994 107.277 9.22994C110.478 9.22994 112.936 10.5752 114.514 12.9411V9.69383ZM108.808 26.6725C112.008 26.6725 114.514 24.2602 114.514 21.0593C114.514 17.9048 112.008 15.4462 108.808 15.4462C105.653 15.4462 103.102 17.9512 103.102 21.0593C103.102 24.2138 105.653 26.6725 108.808 26.6725Z" fill="currentColor"/><path id="Vector_4" d="M84.6907 32.9351C77.9642 32.9351 72.8613 27.8786 72.8613 21.1057C72.8613 14.3328 77.9642 9.22994 84.6907 9.22994C90.3966 9.22994 95.2211 13.1267 95.8242 18.3687H89.1905C88.7266 16.6987 86.871 15.4925 84.6907 15.4925C81.5826 15.4925 79.2631 17.8584 79.2631 21.1057C79.2631 24.2602 81.5826 26.6725 84.6907 26.6725C86.871 26.6725 88.773 25.3736 89.2369 23.6108H95.8706C95.3603 29.0383 90.4894 32.9351 84.6907 32.9351Z" fill="currentColor"/><path id="Vector_5" d="M66.8394 9.69879H73.8906L61.2262 40.0377H54.2214L58.4428 30.6206L49.6752 9.69879H56.7264L61.7829 23.0126L66.8394 9.69879Z" fill="currentColor"/><path id="Vector_6" d="M41.9015 9.69383H48.4425V32.4712H41.9015V29.2239C40.3243 31.5898 37.8656 32.9351 34.6647 32.9351C28.7733 32.9351 24.0879 27.6003 24.0879 21.0593C24.0879 14.5184 28.7733 9.22994 34.6647 9.22994C37.8656 9.22994 40.3243 10.5752 41.9015 12.9411V9.69383ZM36.1956 26.6725C39.3965 26.6725 41.9015 24.2602 41.9015 21.0593C41.9015 17.9048 39.3965 15.4462 36.1956 15.4462C33.0411 15.4462 30.4897 17.9512 30.4897 21.0593C30.4897 24.2138 33.0411 26.6725 36.1956 26.6725Z" fill="currentColor"/><path id="Vector_7" d="M26.071 32.4728H17.7209L10.3913 20.0867H6.86568V32.4728H0V0H12.5252C17.9992 0 22.7774 4.45341 22.7774 10.0202C22.7774 14.1953 20.7826 17.4425 17.5817 19.0198L26.071 32.4728ZM6.86568 6.63373V14.1489H11.8294C14.0561 14.1489 15.8189 12.5252 15.8189 10.3449C15.8189 8.25737 14.0561 6.63373 11.8294 6.63373H6.86568Z" fill="currentColor"/></g></svg><span>Panel Studio</span></h1>
+      <div class="head-actions">
+        <button class="icon-btn" id="retractBtn" type="button" aria-label="Retract panel" aria-expanded="true" title="Retract panel">
+          <svg viewBox="0 0 14 14"><path d="M3.5 8.75 7 5.25l3.5 3.5"/></svg>
+        </button>
+        <button class="icon-btn" id="resetBtn" type="button" aria-label="Reset to Figma defaults" title="Reset to Figma defaults">
+          <svg viewBox="0 0 14 14"><path d="M2.6 7a4.4 4.4 0 1 0 1.3-3.1"/><path d="M2.4 1.9v2.6H5"/></svg>
+        </button>
+        <button class="icon-btn" id="hidePanel" type="button" aria-label="Hide controls" title="Hide controls">
+          <svg viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <div class="section">
+      <select id="kindSelect" aria-label="Illustration"></select>
+    </div>
+    <div id="controls"></div>
+
+    <div class="section">
+      <h2>Aspect ratio</h2>
+      <div class="sizes" role="group" aria-label="Aspect ratio" id="sizeSeg">
+        <button class="size" type="button" data-aspect="16:9"><i style="width:28px;height:16px"></i>Landscape</button>
+        <button class="size" type="button" data-aspect="9:16"><i style="width:12px;height:22px"></i>Portrait</button>
+        <button class="size" type="button" data-aspect="1:1"><i style="width:19px;height:19px"></i>Square</button>
+        <button class="size" type="button" data-aspect="4:5"><i style="width:17px;height:21px"></i>4 : 5</button>
+        <button class="size" type="button" data-aspect="figma"><i id="figmaShape" style="width:20px;height:19px"></i>Figma</button>
+      </div>
+      <div class="mini" aria-label="How the download is framed"><canvas id="mini"></canvas></div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div class="fields">
+        <div class="field"><label for="res">Resolution</label>
+          <select id="res"><option value="1920">1080p</option><option value="2560">2K</option><option value="3840">4K</option></select></div>
+        <div class="field"><label for="fps">Frame rate</label>
+          <select id="fps"><option value="30">30 fps</option><option value="60">60 fps</option></select></div>
+        <div class="field"><label for="loops">Length</label>
+          <select id="loops"><option value="1">1 loop</option><option value="2">2 loops</option><option value="3">3 loops</option></select></div>
+      </div>
+      <div class="size-note" id="sizeNote"></div>
+      <select id="exportSelect" aria-label="Export">
+        <option value="" selected disabled>Export…</option>
+        <option value="video">Video (MP4)</option>
+        <option value="code">Code (HTML)</option>
+      </select>
+      <button type="button" id="renderBtn" hidden>Render video</button>
+      <button type="button" id="codeBtn" hidden>Download code</button>
+      <div class="progress" id="progress" hidden>
+        <div class="bar"><i id="progressBar"></i></div>
+        <p id="progressText">Preparing…</p>
+        <div class="btn-row"><button class="btn ghost" type="button" id="cancelBtn">Cancel</button></div>
+      </div>
+      <div class="btn-row" id="saveRow" hidden>
+        <button class="btn primary" type="button" id="saveBtn">Save video</button>
+        <button class="btn ghost" type="button" id="discardBtn">Discard</button>
+      </div>
+      <p class="note" id="exportNote"></p>
+    </div>
+
+  </div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  var E = window.RaycashEngines;
+  var $ = function (id) { return document.getElementById(id); };
+  // "Check & Radio" from the Raycash Figma Wireframe UI Kit (Active / Deactive)
+  var CHECK_ON = "<svg viewBox=\"0 0 21.8182 21.8182\" aria-hidden=\"true\"><path fill=\"currentColor\" fill-rule=\"evenodd\" d=\"M10.9091 20.6818C5.51176 20.6818 1.13636 16.3065 1.13636 10.9091C1.13636 5.51176 5.51176 1.13636 10.9091 1.13636C16.3065 1.13636 20.6818 5.51176 20.6818 10.9091C20.6818 16.3065 16.3065 20.6818 10.9091 20.6818ZM14.9818 8.52505C15.4223 8.28415 15.5841 7.73175 15.3432 7.29125C15.1023 6.85075 14.5499 6.68893 14.1095 6.92984C12.447 7.83896 11.0724 9.59355 10.1481 11.0087C9.80654 11.5318 9.51473 12.027 9.28127 12.4465C9.06349 12.2352 8.8478 12.0518 8.65489 11.8993C8.40245 11.6997 8.17529 11.5423 8.00966 11.4338L7.72326 11.2559C7.28714 11.0072 6.73194 11.1591 6.4832 11.5953C6.23452 12.0313 6.3863 12.5863 6.8222 12.8352L7.01337 12.9547C7.1432 13.0397 7.32513 13.1657 7.52725 13.3255C7.94321 13.6544 8.39205 14.0855 8.67453 14.5577C8.84788 14.8475 9.16764 15.0174 9.50482 14.9988C9.84191 14.9802 10.141 14.776 10.2815 14.469L10.3708 14.2823C10.4324 14.1565 10.5245 13.9725 10.6445 13.7458C10.885 13.2915 11.2346 12.6702 11.6704 12.0029C12.5644 10.6341 13.7351 9.20682 14.9818 8.52505Z\"/></svg>", CHECK_OFF = "<svg viewBox=\"0 0 20 20\" aria-hidden=\"true\"><path fill=\"none\" stroke=\"currentColor\" d=\"M19.5 10C19.5 15.2467 15.2467 19.5 10 19.5C4.75329 19.5 0.5 15.2467 0.5 10C0.5 4.75329 4.75329 0.5 10 0.5C15.2467 0.5 19.5 4.75329 19.5 10Z\"/></svg>";
+  var clone = function (o) { return JSON.parse(JSON.stringify(o)); };
+
+  // ---- controls per illustration ----
+  var CONTROLS = {
+    fan: [
+      { group: 'Timing', items: [
+        { key: 'wipes', label: 'Wipes per cycle', min: 1, max: 3, step: 1, unit: '' },
+        { key: 'interval', label: 'Gap between panels', min: 0.05, max: 0.6, step: 0.01, unit: 's' },
+        { key: 'step', label: 'Panel move length', min: 0.8, max: 4, step: 0.05, unit: 's' },
+        { key: 'pause', label: 'Pause between wipes', min: 0, max: 4, step: 0.1, unit: 's' },
+        { key: 'rest', label: 'Rest after wipes', min: 0, max: 15, step: 0.5, unit: 's' } ] },
+      { group: 'Feel', items: [
+        { key: 'stagger', label: 'Panel stagger', min: 0, max: 0.2, step: 0.01, unit: 's', hint: 'The front panel sets off first; each one behind follows this much later' },
+        { key: 'resistance', label: 'Resistance', min: 0, max: 0.3, step: 0.01, unit: '', hint: 'How far panels lean back before they lift' },
+        { key: 'softness', label: 'Soft landing', min: 0, max: 1, step: 0.01, unit: '', hint: 'Higher settles more slowly into place' },
+        { key: 'sway', label: 'Sway', min: 0, max: 6, step: 0.1, unit: '°', hint: 'Shared slow drift while resting' } ] },
+      { group: 'Colors', colors: [['base', 'Base'], ['pale', 'Pale', ['pale2']], ['gold', 'Gold'], ['lime', 'Lime'], ['bg', 'Background']] },
+    ],
+    conveyor: [
+      { group: 'Timing', items: [
+        { key: 'wipes', label: 'Wipes per cycle', min: 1, max: 3, step: 1, unit: '' },
+        { key: 'wipeDur', label: 'Wipe length', min: 1, max: 6, step: 0.1, unit: 's' },
+        { key: 'pause', label: 'Slow drift between wipes', min: 0, max: 4, step: 0.1, unit: 's' },
+        { key: 'rest', label: 'Slow drift after wipes', min: 0, max: 15, step: 0.5, unit: 's' } ] },
+      { group: 'Feel', items: [
+        { key: 'creep', label: 'Slow drift speed', min: 0, max: 0.15, step: 0.005, unit: '', hint: 'Panels per second between wipes. New panels only arrive during a wipe' },
+        { key: 'stagger', label: 'Panel stagger', min: 0, max: 0.2, step: 0.01, unit: 's', hint: 'The front panel sets off first; each one behind follows this much later' },
+        { key: 'build', label: 'Build-up', min: 0.15, max: 0.8, step: 0.01, unit: '', hint: 'Higher eases into each wipe more gradually' },
+        { key: 'softness', label: 'Soft landing', min: 0, max: 1, step: 0.01, unit: '', hint: 'Higher eases back down more slowly' } ] },
+      { group: 'Light', toggles: [['glows', 'Soft glows'], ['fade', 'Bottom fade']], items: [
+        { key: 'glowStrength', label: 'Glow strength', min: 0, max: 2, step: 0.05, unit: '×' } ] },
+      { group: 'Colors', colors: [['base', 'Base'], ['pale', 'Pale'], ['gold', 'Gold'], ['lime', 'Lime'], ['bgA', 'Sky top'], ['bgB', 'Sky bottom'], ['fade', 'Fade']] },
+    ],
+    peaks: [
+      { group: 'Timing', items: [
+        { key: 'wipes', label: 'Wipes per cycle', min: 1, max: 3, step: 1, unit: '' },
+        { key: 'wipeDur', label: 'Wipe length', min: 1, max: 6, step: 0.1, unit: 's' },
+        { key: 'pause', label: 'Slow spread between wipes', min: 0, max: 4, step: 0.1, unit: 's' },
+        { key: 'rest', label: 'Slow spread after wipes', min: 0, max: 15, step: 0.5, unit: 's' } ] },
+      { group: 'Feel', items: [
+        { key: 'creep', label: 'Slow spread speed', min: 0, max: 0.15, step: 0.005, unit: '', hint: 'Slots per second between wipes. Never pulls a new panel out of the seam' },
+        { key: 'stagger', label: 'Panel stagger', min: 0, max: 0.2, step: 0.01, unit: 's', hint: 'The front panel sets off first; each one behind follows this much later' },
+        { key: 'build', label: 'Build-up', min: 0.15, max: 0.8, step: 0.01, unit: '', hint: 'Higher eases into each wipe more gradually' },
+        { key: 'softness', label: 'Soft landing', min: 0, max: 1, step: 0.01, unit: '', hint: 'Higher eases back down more slowly' } ] },
+      { group: 'Light', toggles: [['glows', 'Soft glows'], ['fade', 'Bottom fade']], items: [
+        { key: 'glowStrength', label: 'Glow strength', min: 0, max: 2, step: 0.05, unit: '×' } ] },
+      { group: 'Colors', colors: [['base', 'Base'], ['pale', 'Pale'], ['gold', 'Gold'], ['lime', 'Lime'], ['bgTop', 'Sky top'], ['bgBottom', 'Sky bottom'], ['fade', 'Fade']] },
+    ],
+  };
+
+  // ---- state (remembered per viewer when storage allows) ----
+  var STORE = 'raycash-panel-studio-v4', OLD_STORE = 'raycash-panel-studio-v3';
+  var allSettings = {}; Object.keys(E).forEach(function (k) { allSettings[k] = clone(E[k].defaults); });
+  var state = { kind: 'fan', settings: allSettings, aspect: '16:9', res: '2560', fps: '30', loops: '1', theme: 'dark', panel: true, collapsed: {}, retracted: false, panelW: 344, mode: 'sun' };
+  try { var saved = JSON.parse(localStorage.getItem(STORE) || 'null'), migrated = false;
+    if (!saved) { saved = JSON.parse(localStorage.getItem(OLD_STORE) || 'null'); migrated = !!saved; }
+    if (saved) { ['kind', 'aspect', 'res', 'fps', 'loops', 'theme'].forEach(function (k) { if (saved[k]) state[k] = saved[k]; });
+      if (!E[state.kind]) state.kind = 'fan';
+      if (saved.panel === false) state.panel = false;
+      if (saved.collapsed && typeof saved.collapsed === 'object') state.collapsed = saved.collapsed;
+      if (saved.retracted) state.retracted = true;
+      if (saved.mode === 'moon') state.mode = 'moon';
+      if (+saved.panelW) state.panelW = +saved.panelW;
+      if (migrated) state.theme = 'dark';
+      Object.keys(E).forEach(function (k) { if (saved.settings && saved.settings[k]) { var d = clone(E[k].defaults), s = saved.settings[k];
+        Object.keys(d).forEach(function (key) { if (key === 'colors') Object.keys(d.colors).forEach(function (c) { if (s.colors && s.colors[c]) d.colors[c] = s.colors[c]; }); else if (key in s) d[key] = s[key]; });
+        state.settings[k] = d; } }); } } catch (e) {}
+  var persist = function () { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} };
+
+  // ---- the panel is always the black one ----
+  function applyTheme() { document.documentElement.setAttribute('data-theme', 'dark'); }
+
+  // ---- panel show / hide ----
+  function applyPanel() { $('panel').hidden = !state.panel; $('showPanel').hidden = state.panel; document.body.classList.toggle('panel-open', state.panel); }
+  var reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  var morphing = null;
+  // Expand / collapse: the panel unfolds downward from its top edge (where the Controls
+  // button sits) and folds back up into it; its contents fade in a beat after it opens.
+  function slide(panel, opening) {
+    var dur = opening ? 460 : 320, shut = 'inset(0 0 calc(100% - 44px) 0 round 18px)', full = 'inset(0 0 0 0 round 18px)';
+    var a = panel.animate(opening
+      ? [{ clipPath: shut, opacity: 0.6 }, { clipPath: full, opacity: 1 }]
+      : [{ clipPath: full, opacity: 1 }, { clipPath: shut, opacity: 0 }],
+      { duration: dur, easing: opening ? 'cubic-bezier(0.22, 1, 0.36, 1)' : 'cubic-bezier(0.55, 0, 0.75, 0.2)', fill: 'both' });
+    if (opening) [].forEach.call(panel.children, function (c, i) {
+      c.animate([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }],
+        { duration: 360, delay: 90 + i * 50, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' });
+    });
+    var done = new Promise(function (r) { setTimeout(r, dur + 200); });
+    return Promise.race([a.finished.catch(function () {}), done]).then(function () { a.cancel(); });
+  }
+  function openPanel() {
+    if (morphing) return;
+    state.panel = true; persist(); applyPanel();
+    if (reduceMotion.matches) return;
+    morphing = slide($('panel'), true).then(function () { morphing = null; });
+  }
+  function closePanel() {
+    if (morphing) return;
+    var panel = $('panel'), btn = $('showPanel');
+    state.panel = false; persist();
+    if (reduceMotion.matches) { applyPanel(); btn.focus(); return; }
+    morphing = slide(panel, false).then(function () {
+      applyPanel();
+      btn.animate([{ opacity: 0, transform: 'translateX(8px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+      btn.focus(); morphing = null;
+    });
+  }
+  $('hidePanel').addEventListener('click', closePanel);
+
+  // Retract to the header row / expand back to full height (animated height).
+  function applyRetract(animate) {
+    var panel = $('panel'), from = panel.offsetHeight;
+    panel.classList.toggle('retracted', state.retracted);
+    $('retractBtn').setAttribute('aria-expanded', String(!state.retracted));
+    $('retractBtn').setAttribute('aria-label', state.retracted ? 'Expand panel' : 'Retract panel');
+    $('retractBtn').title = state.retracted ? 'Expand panel' : 'Retract panel';
+    if (!animate || reduceMotion.matches || panel.hidden) return;
+    var to = panel.offsetHeight;
+    panel.animate([{ height: from + 'px' }, { height: to + 'px' }], { duration: 340, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+  }
+  $('retractBtn').addEventListener('click', function () { state.retracted = !state.retracted; applyRetract(true); persist(); });
+
+  // Drag the panel's left edge to make it wider or narrower (the player follows).
+  var MIN_W = 300, MAX_W = 720;
+  function setPanelWidth(w) {
+    state.panelW = Math.round(Math.max(MIN_W, Math.min(MAX_W, innerWidth - 48, w)));
+    document.documentElement.style.setProperty('--panel-w', state.panelW + 'px');
+    measurePlayer();
+  }
+  (function () {
+    var h = $('panelResize'), startX = 0, startW = 0;
+    h.addEventListener('pointerdown', function (e) {
+      startX = e.clientX; startW = $('panel').offsetWidth; h.setPointerCapture(e.pointerId);
+      h.classList.add('dragging'); document.body.classList.add('resizing'); e.preventDefault();
+    });
+    h.addEventListener('pointermove', function (e) { if (h.classList.contains('dragging')) setPanelWidth(startW + (startX - e.clientX)); });
+    var end = function () { if (!h.classList.contains('dragging')) return; h.classList.remove('dragging'); document.body.classList.remove('resizing'); persist(); };
+    h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
+    h.addEventListener('dblclick', function () { setPanelWidth(344); persist(); });
+    h.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { setPanelWidth(state.panelW + (e.key === 'ArrowLeft' ? 16 : -16)); persist(); e.preventDefault(); }
+    });
+  })();
+  $('showPanel').addEventListener('click', openPanel);
+
+  // ---- the animation fills the window; a small second view shows the download framing ----
+  var canvas = $('stage'), ctx = canvas.getContext('2d');
+  var mini = $('mini'), mctx = mini.getContext('2d');
+  var anim = null, miniAnim = null, playing = !matchMedia('(prefers-reduced-motion: reduce)').matches, time = 0, last = performance.now();
+  // Sun or Moon: Moon swaps in its own palette (kept separately per illustration) and turns on
+  // the night treatment in the engine.
+  function moonPalette(kind) { var o = {}; Object.keys(E[kind].defaults.colors).forEach(function (k) { o[k] = E.MOON[k] || E.MOON.gold; }); return o; }
+  function palette(kind) { var S = state.settings[kind]; if (state.mode !== 'moon') return S.colors; return S.moonColors3 || (S.moonColors3 = moonPalette(kind)); }
+  function eff(kind) { var S = state.settings[kind]; if (state.mode !== 'moon') return S; var o = clone(S); o.colors = palette(kind); o.moon = true; delete o.moonColors; return o; }
+  function rebuild() {
+    var S = eff(state.kind);
+    anim = E[state.kind].create(S, ctx); miniAnim = E[state.kind].create(S, mctx);
+    document.body.style.background = anim.background;
+    time = time % anim.loop; drawPhases(); updateMeta(); updateSizeNote();
+  }
+  function fitStage() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(innerWidth * dpr); canvas.height = Math.round(innerHeight * dpr);
+    if (anim) anim.render(time, canvas.width, canvas.height);
+  }
+  addEventListener('resize', fitStage);
+  function measurePlayer() {
+    document.documentElement.style.setProperty('--player-h', $('player').offsetHeight + 'px');
+    document.documentElement.style.setProperty('--head-h', document.querySelector('.panel-head').offsetHeight + 'px');
+  }
+  addEventListener('resize', measurePlayer);
+
+  function aspectRatio() {
+    var f = E[state.kind].frame;
+    if (state.aspect === 'figma') return f.w / f.h;
+    var p = state.aspect.split(':'); return +p[0] / +p[1];
+  }
+  function exportSize() {
+    var ar = aspectRatio(), long = +state.res, w, h;
+    if (ar >= 1) { w = long; h = Math.round(long / ar / 2) * 2; } else { h = long; w = Math.round(long * ar / 2) * 2; }
+    return { w: w, h: h };
+  }
+  function fitMini() {
+    var ar = aspectRatio(), box = 130, w = ar >= 1 ? box * Math.min(ar, 2.2) : box * ar, h = w / ar;
+    if (h > box) { h = box; w = h * ar; }
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    mini.style.width = Math.round(w) + 'px'; mini.style.height = Math.round(h) + 'px';
+    mini.width = Math.round(w * dpr); mini.height = Math.round(h * dpr);
+  }
+
+  function tick(now) {
+    var dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (playing && anim) time = (time + dt) % anim.loop;
+    if (anim) {
+      anim.render(time, canvas.width, canvas.height);
+      updateClock();
+      if (state.panel) miniAnim.render(time, mini.width, mini.height);
+    }
+    requestAnimationFrame(tick);
+  }
+  function updateClock() {
+    $('clock').innerHTML = '<b>' + time.toFixed(2) + '</b> / ' + anim.loop.toFixed(2) + ' s';
+    var f = time / anim.loop; $('playhead').style.left = (f * 100) + '%';
+    if (document.activeElement !== $('scrub')) $('scrub').value = Math.round(f * 1000);
+  }
+  function drawPhases() {
+    var box = $('phases'); box.textContent = '';
+    anim.phases.forEach(function (p) {
+      var l = p.start / anim.loop * 100, w = (p.end - p.start) / anim.loop * 100;
+      var tag = document.createElement('div'); tag.className = 'phase'; tag.style.left = l + '%'; tag.style.width = w + '%'; tag.textContent = p.label;
+      var bar = document.createElement('div'); bar.className = 'phase-bar'; bar.style.left = l + '%'; bar.style.width = w + '%';
+      box.appendChild(tag); box.appendChild(bar);
+    });
+  }
+  function setPlaying(v) {
+    playing = v; $('playBtn').setAttribute('aria-label', v ? 'Pause' : 'Play');
+    $('playIcon').innerHTML = v ? '<rect x="2" y="1" width="3.5" height="12" rx="1"/><rect x="8.5" y="1" width="3.5" height="12" rx="1"/>' : '<path d="M3 1.5v11a.8.8 0 0 0 1.2.7l9-5.5a.8.8 0 0 0 0-1.4l-9-5.5A.8.8 0 0 0 3 1.5z"/>';
+  }
+  $('playBtn').addEventListener('click', function () { setPlaying(!playing); });
+  $('scrub').addEventListener('input', function (e) { setPlaying(false); time = e.target.value / 1000 * anim.loop; });
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && !/INPUT|SELECT|BUTTON|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  // ---- inspector ----
+  function fmt(item, v) { return (item.step >= 1 ? String(Math.round(v)) : (+v).toFixed(item.step < 0.01 ? 3 : 2)) + (item.unit ? (item.unit === 's' ? ' s' : item.unit) : ''); }
+  function updateMeta() {
+    var eng = E[state.kind], f = eng.frame;
+    var fs = $('figmaShape'), ar = f.w / f.h; fs.style.width = Math.round(20 * Math.min(1, ar)) + 'px'; fs.style.height = Math.round(20 / Math.max(1, ar)) + 'px';
+  }
+  // Section titles open and close their section; remembered per section name.
+  var CHEVRON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>';
+  function makeCollapsible(sec) {
+    var h2 = sec.querySelector(':scope > h2, :scope > .colors-head > h2'); if (!h2) return;
+    var head = h2.parentElement === sec ? h2 : h2.parentElement, name = h2.textContent.trim();
+    var body = document.createElement('div'); body.className = 'section-body';
+    var inner = document.createElement('div'); inner.className = 'section-inner'; body.appendChild(inner);
+    [].slice.call(sec.children).forEach(function (c) { if (c !== head) inner.appendChild(c); });
+    sec.appendChild(body);
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'sec-toggle';
+    btn.innerHTML = '<span></span>' + CHEVRON; btn.firstChild.textContent = name;
+    h2.textContent = ''; h2.appendChild(btn);
+    var id = 'sec-' + name.toLowerCase().replace(/\W+/g, '-') + '-' + Math.random().toString(36).slice(2, 6);
+    body.id = id; btn.setAttribute('aria-controls', id);
+    var set = function (closed, animate) {
+      sec.classList.toggle('collapsed', closed); btn.setAttribute('aria-expanded', String(!closed)); body.inert = closed;
+      if (animate) { sec.classList.add('moving'); setTimeout(function () { sec.classList.remove('moving'); }, 320); }
+    };
+    set(!!state.collapsed[name], false);
+    btn.addEventListener('click', function () { var closed = !sec.classList.contains('collapsed'); state.collapsed[name] = closed; set(closed, true); persist(); });
+  }
+  function buildControls() {
+    var host = $('controls'), S = state.settings[state.kind]; host.textContent = '';
+    (CONTROLS[state.kind] || CONTROLS.conveyor).forEach(function (g) {
+      var sec = document.createElement('div'); sec.className = 'section';
+      var h = document.createElement('h2'); h.textContent = g.group;
+      if (g.colors) {
+        var head = document.createElement('div'); head.className = 'colors-head'; head.appendChild(h);
+        var rc = document.createElement('button'); rc.type = 'button'; rc.className = 'link-btn'; rc.textContent = 'Reset colors';
+        rc.addEventListener('click', function () { if (state.mode === 'moon') S.moonColors3 = moonPalette(state.kind); else S.colors = clone(E[state.kind].defaults.colors); discardRender(); buildControls(); rebuild(); persist(); toast('Colors reset to the Figma originals'); });
+        head.appendChild(rc); sec.appendChild(head);
+      } else sec.appendChild(h);
+      (g.toggles || []).forEach(function (t) {
+        var row = document.createElement('button'); row.type = 'button'; row.className = 'toggle'; row.id = 'c-' + state.kind + '-' + t[0]; row.setAttribute('role', 'checkbox');
+        var paint = function () { row.setAttribute('aria-checked', String(!!S[t[0]])); row.innerHTML = '<span>' + t[1] + '</span>' + (S[t[0]] ? CHECK_ON : CHECK_OFF); };
+        paint();
+        row.addEventListener('click', function () { S[t[0]] = !S[t[0]]; paint(); rebuild(); persist(); });
+        sec.appendChild(row);
+      });
+      (g.items || []).forEach(function (it) {
+        var id = 'c-' + state.kind + '-' + it.key, wrap = document.createElement('div'); wrap.className = 'ctrl';
+        wrap.innerHTML = '<div class="row"><label for="' + id + '">' + it.label + '</label><output for="' + id + '"></output></div>' +
+          '<input type="range" class="slider" id="' + id + '" min="' + it.min + '" max="' + it.max + '" step="' + it.step + '">' + (it.hint ? '<div class="hint">' + it.hint + '</div>' : '');
+        var input = wrap.querySelector('input'), out = wrap.querySelector('output');
+        var fill = function () { input.style.setProperty('--p', ((input.value - it.min) / (it.max - it.min) * 100) + '%'); };
+        input.value = S[it.key]; out.textContent = fmt(it, S[it.key]); fill();
+        input.addEventListener('input', function () { S[it.key] = +input.value; out.textContent = fmt(it, S[it.key]); fill(); rebuild(); persist(); });
+        sec.appendChild(wrap);
+      });
+      if (g.colors) {
+        var grid = document.createElement('div'); grid.className = 'swatches';
+        // Sun / Moon switch for the illustration, at the top of Colors
+        var modes = document.createElement('div'); modes.className = 'seg'; modes.setAttribute('role', 'group'); modes.setAttribute('aria-label', 'Light');
+        modes.innerHTML = '<button type="button" data-mode="sun">Sun rays</button><button type="button" data-mode="moon">Moon rays</button>';
+        [].forEach.call(modes.children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.mode === state.mode)); });
+        modes.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b || b.dataset.mode === state.mode) return;
+          state.mode = b.dataset.mode; discardRender(); buildControls(); rebuild(); persist(); toast(state.mode === 'moon' ? 'Moon rays' : 'Sun rays'); });
+        sec.appendChild(modes);
+        var CO = palette(state.kind);
+        g.colors.forEach(function (c) {
+          var id = 'c-' + state.kind + '-' + c[0], sw = document.createElement('label'); sw.className = 'swatch'; sw.htmlFor = id;
+          sw.innerHTML = '<input type="color" id="' + id + '"><span>' + c[1] + '</span><code></code>';
+          var input = sw.querySelector('input'), code = sw.querySelector('code');
+          input.value = CO[c[0]].toLowerCase(); code.textContent = CO[c[0]];
+          input.addEventListener('input', function () {
+            CO[c[0]] = input.value.toUpperCase(); (c[2] || []).forEach(function (k) { CO[k] = input.value.toUpperCase(); });
+            code.textContent = CO[c[0]]; rebuild(); persist();
+          });
+          grid.appendChild(sw);
+        });
+        sec.appendChild(grid);
+      }
+      host.appendChild(sec); makeCollapsible(sec);
+    });
+  }
+  function selectKind(k) {
+    state.kind = k;
+    markKind();
+    discardRender(); buildControls(); rebuild(); fitMini(); persist();
+  }
+  var KINDS = Object.keys(E).sort(function (a, b) { return E[a].number - E[b].number; });
+  $('kindSelect').innerHTML = KINDS.map(function (k) { return '<option value="' + k + '">#' + Math.floor(E[k].number) + (E[k].number % 1 ? 'b' : '') + ' · ' + E[k].name + '</option>'; }).join('');
+  function markKind() { $('kindSelect').value = state.kind; }
+  $('kindSelect').addEventListener('change', function () { selectKind(this.value); });
+
+  function applyAspect() { document.querySelectorAll('#sizeSeg button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.aspect === state.aspect)); }); fitMini(); updateSizeNote(); }
+  $('sizeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; state.aspect = b.dataset.aspect; discardRender(); applyAspect(); persist(); });
+  ['res', 'fps', 'loops'].forEach(function (id) {
+    $(id).value = state[id];
+    $(id).addEventListener('change', function () { state[id] = $(id).value; discardRender(); updateSizeNote(); persist(); });
+  });
+  // Estimated download size. The encoder aims for a bitrate set by size and frame rate; these
+  // smooth gradients come out at about a fifth of it (measured: 1080p Fan, 14 s = 2.8 MB), and each finished render
+  // re-measures that share for the illustration so later estimates get closer.
+  var sizeShare = { fan: 0.19, peaks: 0.19 };
+  function targetBitrate(w, h, fps) { return Math.round(Math.min(60e6, w * h * fps * 0.14)); }
+  function fmtBytes(b) { return b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : b >= 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB'; }
+  function updateSizeNote() {
+    if (!anim) return; var s = exportSize(), fps = +state.fps, secs = anim.loop * +state.loops;
+    var est = targetBitrate(s.w, s.h, fps) * secs / 8 * (sizeShare[state.kind] || 0.19);
+    var code = $('engine-src').textContent.length + 1600;
+    $('sizeNote').textContent = s.w + ' × ' + s.h + ' · ' + fps + ' fps · ' + secs.toFixed(1) + ' s · ' + Math.round(secs * fps) + ' frames · about ' + fmtBytes(est);
+    $('exportSelect').querySelector('option[value="video"]').textContent = 'Video (MP4) · about ' + fmtBytes(est);
+    $('exportSelect').querySelector('option[value="code"]').textContent = 'Code (HTML) · ' + fmtBytes(code);
+  }
+  $('resetBtn').addEventListener('click', function () {
+    state.settings[state.kind] = clone(E[state.kind].defaults); discardRender(); buildControls(); rebuild(); persist(); toast('Reset ' + E[state.kind].name + ' to the Figma defaults');
+  });
+
+  // ---- saving files: the viewer's save prompt inside Claude, a normal download elsewhere ----
+  var downloadsP = (window.claude && window.claude.use) ? window.claude.use('downloads') : Promise.resolve(undefined);
+  async function offerFile(filename, blob) {
+    var dl = await downloadsP;
+    if (dl === null) { toast('Saving files isn’t available in this view.'); return false; }
+    if (dl) {
+      try { await dl.save({ filename: filename, data: blob }); toast('Saved ' + filename); return true; }
+      catch (err) {
+        var code = err && err.code;
+        if (code === 'declined') toast('Save cancelled');
+        else if (code === 'rate_limited') toast('A save prompt is already open. Try again in a moment.');
+        else if (code === 'too_large') toast('That file is too large to save here. Try a lower resolution.');
+        else toast('Saving isn’t available here right now.');
+        return false;
+      }
+    }
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 2000); toast('Downloaded ' + filename); return true;
+  }
+  var toastTimer;
+  function toast(msg) { var t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3200); }
+
+  // ---- dropdowns ----
+  function dropdown(btnId, menuId) {
+    var b = $(btnId), m = $(menuId);
+    function set(open) { m.hidden = !open; b.setAttribute('aria-expanded', String(open)); if (open) { var f = m.querySelector('[aria-checked="true"]') || m.querySelector('button:not(:disabled)'); if (f) f.focus(); } }
+    b.addEventListener('click', function () { set(m.hidden); });
+    m.addEventListener('click', function (e) { if (e.target.closest('button')) set(false); });
+    document.addEventListener('click', function (e) { if (!m.hidden && !b.contains(e.target) && !m.contains(e.target)) set(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !m.hidden) { set(false); b.focus(); } });
+  }
+  $('exportSelect').addEventListener('change', function () {
+    var v = this.value; this.value = '';
+    if (v === 'video') $('renderBtn').click(); else if (v === 'code') $('codeBtn').click();
+  });
+
+  // ---- code export: one self-contained HTML file with the engine and current settings ----
+  $('codeBtn').addEventListener('click', function () {
+    var eng = E[state.kind], S = eff(state.kind), bg = eng.create(S, document.createElement('canvas').getContext('2d')).background;
+    var src = (E[state.kind].number === 1 || E[state.kind].number === 3 ? '' : 'var RAYCASH_ILLUSTRATIONS = ' + JSON.stringify((function () { var o = {}; o[eng.id] = RAYCASH_ILLUSTRATIONS[eng.id]; return o; })()) + ';\n') + $('engine-src').textContent;
+    var html = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+      '<title>Raycash ' + eng.name + '</title>\n<style>html,body{margin:0;height:100%;background:' + bg + ';overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style>\n</head>\n<body>\n<canvas id="c"></canvas>\n' +
+      '<script>' + src + '<\/script>\n<script>\n// Settings exported from Raycash Panel Studio. Edit and reload to change the motion.\n' +
+      'var SETTINGS = ' + JSON.stringify(S, null, 2) + ';\n' +
+      'var canvas = document.getElementById("c"), ctx = canvas.getContext("2d");\n' +
+      'var anim = RaycashEngines.' + eng.id + '.create(SETTINGS, ctx), W = 0, H = 0;\n' +
+      'function resize() { var d = Math.min(window.devicePixelRatio || 1, 2); W = canvas.width = Math.round(innerWidth * d); H = canvas.height = Math.round(innerHeight * d); }\n' +
+      'addEventListener("resize", resize); resize();\n' +
+      'var start = performance.now();\n' +
+      'function draw(now) { anim.render((now - start) / 1000, W, H); requestAnimationFrame(draw); }\n' +
+      'requestAnimationFrame(draw);\n<\/script>\n</body>\n</html>\n';
+    offerFile('raycash-' + eng.id + (state.mode === 'moon' ? '-moon' : '') + '.html', new Blob([html], { type: 'text/html' }));
+  });
+
+  // ---- video export: frame-by-frame render, WebCodecs encode, MP4 (or WebM) mux ----
+  var rendered = null, cancelFlag = false, busy = false;
+  function discardRender() { rendered = null; $('saveRow').hidden = true; }
+  $('discardBtn').addEventListener('click', function () { discardRender(); $('exportNote').className = 'note'; $('exportNote').textContent = 'Discarded the rendered video.'; });
+  $('cancelBtn').addEventListener('click', function () { cancelFlag = true; });
+  $('saveBtn').addEventListener('click', function () { if (rendered) offerFile(rendered.name, rendered.blob); });
+
+  async function pickCodec(w, h, fps, bitrate) {
+    if (typeof VideoEncoder === 'undefined') return null;
+    var tries = [];
+    if (window.Mp4Muxer) ['avc1.640034', 'avc1.640033', 'avc1.4d0034', 'avc1.42003e'].forEach(function (c) { tries.push({ c: c, fmt: 'mp4', mux: 'avc' }); });
+    if (window.WebMMuxer) [['vp09.00.51.08', 'V_VP9'], ['vp8', 'V_VP8']].forEach(function (c) { tries.push({ c: c[0], fmt: 'webm', mux: c[1] }); });
+    for (var i = 0; i < tries.length; i++) {
+      var cfg = { codec: tries[i].c, width: w, height: h, bitrate: bitrate, framerate: fps };
+      try { var s = await VideoEncoder.isConfigSupported(cfg); if (s.supported) return Object.assign({ cfg: cfg }, tries[i]); } catch (e) {}
+    }
+    return null;
+  }
+
+  $('renderBtn').addEventListener('click', async function () {
+    if (busy) return;
+    var size = exportSize(), fps = +state.fps, eng = E[state.kind], S = clone(eff(state.kind));
+    var bitrate = targetBitrate(size.w, size.h, fps);
+    var note = $('exportNote'); note.className = 'note';
+    var choice = await pickCodec(size.w, size.h, fps, bitrate);
+    if (!choice) { note.className = 'note error'; note.textContent = 'This browser can’t encode video here. Open the page in Chrome, Edge or Safari 17 or later.'; return; }
+
+    busy = true; cancelFlag = false; discardRender();
+    $('renderBtn').disabled = true; $('exportSelect').disabled = true; $('progress').hidden = false; $('progressBar').style.width = '0%';
+    var off = document.createElement('canvas'); off.width = size.w; off.height = size.h;
+    var octx = off.getContext('2d', { alpha: false });
+    var a = eng.create(S, octx), total = Math.round(a.loop * +state.loops * fps);
+    var muxer = choice.fmt === 'mp4'
+      ? new Mp4Muxer.Muxer({ target: new Mp4Muxer.ArrayBufferTarget(), video: { codec: 'avc', width: size.w, height: size.h }, fastStart: 'in-memory' })
+      : new WebMMuxer.Muxer({ target: new WebMMuxer.ArrayBufferTarget(), video: { codec: choice.mux, width: size.w, height: size.h, frameRate: fps } });
+    var failure = null;
+    var encoder = new VideoEncoder({ output: function (chunk, meta) { muxer.addVideoChunk(chunk, meta); }, error: function (e) { failure = e; } });
+    encoder.configure(Object.assign({ latencyMode: 'quality' }, choice.cfg, choice.fmt === 'mp4' ? { avc: { format: 'avc' } } : {}));
+    var started = performance.now();
+    try {
+      for (var i = 0; i < total; i++) {
+        if (cancelFlag) throw new Error('cancelled');
+        if (failure) throw failure;
+        a.render(i / fps, size.w, size.h);
+        var frame = new VideoFrame(off, { timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps) });
+        encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 }); frame.close();
+        while (encoder.encodeQueueSize > 6) await new Promise(function (r) { setTimeout(r, 1); });
+        if (i % 3 === 0 || i === total - 1) {
+          var done = (i + 1) / total, el = (performance.now() - started) / 1000, left = el / done - el;
+          $('progressBar').style.width = (done * 100).toFixed(1) + '%';
+          $('progressText').textContent = 'Rendering frame ' + (i + 1) + ' of ' + total + (i > 10 ? ' · about ' + Math.ceil(left) + ' s left' : '');
+          await new Promise(function (r) { setTimeout(r, 0); });
+        }
+      }
+      $('progressText').textContent = 'Finishing the file…';
+      await encoder.flush(); if (failure) throw failure;
+      muxer.finalize();
+      var blob = new Blob([muxer.target.buffer], { type: choice.fmt === 'mp4' ? 'video/mp4' : 'video/webm' });
+      var label = state.aspect === 'figma' ? 'figma' : state.aspect.replace(':', 'x');
+      if (choice.fmt === 'mp4') { sizeShare[eng.id] = blob.size * 8 / (bitrate * total / fps); updateSizeNote(); }
+      rendered = { blob: blob, name: 'raycash-' + eng.id + (state.mode === 'moon' ? '-moon' : '') + '-' + label + '-' + size.w + 'x' + size.h + '-' + fps + 'fps.' + choice.fmt };
+      $('saveBtn').textContent = 'Save ' + choice.fmt.toUpperCase() + ' · ' + fmtBytes(blob.size);
+      $('saveRow').hidden = false;
+      note.textContent = 'Rendered ' + total + ' frames in ' + ((performance.now() - started) / 1000).toFixed(0) + ' s' + (choice.fmt === 'webm' ? '. This browser can’t make MP4 here, so it’s WebM.' : '.');
+    } catch (err) {
+      try { encoder.close(); } catch (e) {}
+      if (err && err.message === 'cancelled') note.textContent = 'Render cancelled.';
+      else { note.className = 'note error'; note.textContent = 'The render stopped: ' + (err && err.message ? err.message : err) + '. Try a lower resolution.'; }
+    } finally {
+      busy = false; $('renderBtn').disabled = false; $('exportSelect').disabled = false; $('progress').hidden = true;
+      try { if (encoder.state !== 'closed') encoder.close(); } catch (e) {}
+    }
+  });
+
+  // ---- boot ----
+  applyTheme(); applyPanel();
+  markKind();
+  setPanelWidth(state.panelW);
+  setPlaying(playing); buildControls(); rebuild(); fitStage(); applyAspect(); measurePlayer(); applyRetract(false);
+  makeCollapsible($('sizeSeg').closest('.section'));
+  makeCollapsible($('res').closest('.section'));
+  requestAnimationFrame(function (n) { last = n; tick(n); });
+})();
+</script>
+
+</body>
+</html>
